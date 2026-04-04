@@ -13,6 +13,8 @@ public class PetCareJordanContext(DbContextOptions<PetCareJordanContext> options
     public DbSet<MedicalRecord> MedicalRecords => Set<MedicalRecord>();
     public DbSet<VaccinationRecord> VaccinationRecords => Set<VaccinationRecord>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AppointmentRequest> AppointmentRequests => Set<AppointmentRequest>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -69,6 +71,35 @@ public class PetCareJordanContext(DbContextOptions<PetCareJordanContext> options
             .HasOne(notification => notification.User)
             .WithMany()
             .HasForeignKey(notification => notification.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AppointmentRequest>()
+            .HasOne(appointment => appointment.Pet)
+            .WithMany()
+            .HasForeignKey(appointment => appointment.PetId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AppointmentRequest>()
+            .HasOne(appointment => appointment.Owner)
+            .WithMany(user => user.OwnedAppointments)
+            .HasForeignKey(appointment => appointment.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AppointmentRequest>()
+            .HasOne(appointment => appointment.Vet)
+            .WithMany(user => user.VetAppointments)
+            .HasForeignKey(appointment => appointment.VetId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ChatMessage>()
+            .HasOne(message => message.AppointmentRequest)
+            .WithMany(appointment => appointment.Messages)
+            .HasForeignKey(message => message.AppointmentRequestId);
+
+        modelBuilder.Entity<ChatMessage>()
+            .HasOne(message => message.Sender)
+            .WithMany(user => user.ChatMessages)
+            .HasForeignKey(message => message.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

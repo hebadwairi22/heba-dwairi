@@ -38,5 +38,15 @@ public enum ReportStatus
 public enum NotificationType
 {
     VaccineReminder = 1,
-    General = 2
+    General = 2,
+    AppointmentUpdate = 3
+}
+
+public enum AppointmentStatus
+{
+    Pending = 1,
+    Confirmed = 2,
+    InProgress = 3,
+    Completed = 4,
+    Cancelled = 5
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareJordan.Api.Data;
@@ -11,6 +12,19 @@ namespace PetCareJordan.Api.Controllers;
 [Route("api/[controller]")]
 public class AuthController(PetCareJordanContext context, PasswordService passwordService, JwtTokenService jwtTokenService) : ControllerBase
 {
+    [Authorize]
+    [HttpGet("vets")]
+    public async Task<ActionResult<IEnumerable<UserLookupDto>>> GetVets()
+    {
+        var vets = await context.Users
+            .Where(item => item.Role == UserRole.Vet)
+            .OrderBy(item => item.FullName)
+            .Select(item => new UserLookupDto(item.Id, item.FullName, item.Email, item.PhoneNumber, item.City, item.Role))
+            .ToListAsync();
+
+        return Ok(vets);
+    }
+
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {

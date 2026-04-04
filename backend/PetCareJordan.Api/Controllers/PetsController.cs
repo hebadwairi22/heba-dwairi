@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareJordan.Api.Data;
 using PetCareJordan.Api.Dtos;
 using PetCareJordan.Api.Models;
+using PetCareJordan.Api.Services;
 
 namespace PetCareJordan.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PetsController(PetCareJordanContext context) : ControllerBase
 {
     [HttpGet]
@@ -42,6 +45,7 @@ public class PetsController(PetCareJordanContext context) : ControllerBase
                 pet.City,
                 pet.CollarId,
                 pet.PhotoUrl,
+                pet.OwnerId,
                 pet.Owner!.FullName,
                 pet.AdoptionListing != null ? pet.AdoptionListing.Status : null))
             .ToListAsync();
@@ -98,16 +102,31 @@ public class PetsController(PetCareJordanContext context) : ControllerBase
             return NotFound();
         }
 
-        return Ok(new PetSummaryDto(pet.Id, pet.Name, pet.Type, pet.Breed, pet.City, pet.CollarId, pet.PhotoUrl, pet.Owner.FullName, pet.AdoptionListing?.Status));
+        return Ok(new PetSummaryDto(pet.Id, pet.Name, pet.Type, pet.Breed, pet.City, pet.CollarId, pet.PhotoUrl, pet.OwnerId, pet.Owner.FullName, pet.AdoptionListing?.Status));
     }
 
     [HttpPost]
     public async Task<ActionResult<PetDetailsDto>> CreatePet(CreatePetRequest request)
     {
+        if (!this.CanAccessUser(request.OwnerId))
+        {
+            return Forbid();
+        }
+
         var owner = await context.Users.FirstOrDefaultAsync(user => user.Id == request.OwnerId);
         if (owner is null)
         {
             return BadRequest("Owner not found.");
+        }
+
+        var normalizedPhotoUrl = NormalizePhotoUrl(request.PhotoUrl);
+        if (!string.IsNullOrWhiteSpace(normalizedPhotoUrl))
+        {
+            var photoAlreadyAssigned = await context.Pets.AnyAsync(pet => pet.PhotoUrl.ToLower() == normalizedPhotoUrl);
+            if (photoAlreadyAssigned)
+            {
+                return Conflict("This photo is already assigned to another pet. Please use a different image.");
+            }
         }
 
         var pet = new Pet
@@ -146,4 +165,6 @@ public class PetsController(PetCareJordanContext context) : ControllerBase
 
         return await GetPet(pet.Id);
     }
+
+    private static string NormalizePhotoUrl(string photoUrl) => photoUrl.Trim().ToLowerInvariant();
 }

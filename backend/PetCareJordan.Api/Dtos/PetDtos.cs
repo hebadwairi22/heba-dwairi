@@ -10,6 +10,7 @@ public record PetSummaryDto(
     string City,
     string CollarId,
     string PhotoUrl,
+    int OwnerId,
     string OwnerName,
     AdoptionStatus? AdoptionStatus);
 
@@ -54,6 +55,8 @@ public record CreatePetRequest(
 public record CreateMedicalRecordRequest(int PetId, int VetId, string VisitReason, string Diagnosis, string Treatment, DateTime VisitDateUtc);
 
 public record UpdateMedicalRecordRequest(string VisitReason, string Diagnosis, string Treatment, DateTime VisitDateUtc);
+
+public record CreateVaccinationRequest(int PetId, int VetId, string VaccineName, DateTime? GivenOnUtc, DateTime DueDateUtc, bool IsCompleted);
 
 public record MedicalRecordDto(int Id, string VetName, string VisitReason, string Diagnosis, string Treatment, DateTime VisitDateUtc);
 

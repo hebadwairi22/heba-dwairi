@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareJordan.Api.Data;
 using PetCareJordan.Api.Dtos;
 using PetCareJordan.Api.Models;
+using PetCareJordan.Api.Services;
 
 namespace PetCareJordan.Api.Controllers;
 
@@ -10,6 +12,7 @@ namespace PetCareJordan.Api.Controllers;
 [Route("api/[controller]")]
 public class CommunityController(PetCareJordanContext context) : ControllerBase
 {
+    [Authorize]
     [HttpGet("lost")]
     public async Task<ActionResult<IEnumerable<LostPetReportDto>>> GetLostPets()
     {
@@ -33,6 +36,7 @@ public class CommunityController(PetCareJordanContext context) : ControllerBase
         return Ok(reports);
     }
 
+    [Authorize]
     [HttpPost("lost")]
     public async Task<ActionResult<LostPetReportDto>> CreateLostPetReport(CreateLostPetReportRequest request)
     {
@@ -57,6 +61,7 @@ public class CommunityController(PetCareJordanContext context) : ControllerBase
         return CreatedAtAction(nameof(GetLostPets), new LostPetReportDto(report.Id, report.PetName, report.PetType, report.Description, report.ApproximateAgeInMonths, report.LastSeenPlace, report.LastSeenDateUtc, report.RewardAmount, report.PhotoUrl, report.ContactName, report.ContactPhone, report.Status));
     }
 
+    [Authorize]
     [HttpGet("found")]
     public async Task<ActionResult<IEnumerable<FoundPetReportDto>>> GetFoundPets()
     {
@@ -77,6 +82,7 @@ public class CommunityController(PetCareJordanContext context) : ControllerBase
         return Ok(reports);
     }
 
+    [Authorize]
     [HttpPost("found")]
     public async Task<ActionResult<FoundPetReportDto>> CreateFoundPetReport(CreateFoundPetReportRequest request)
     {
@@ -98,9 +104,15 @@ public class CommunityController(PetCareJordanContext context) : ControllerBase
         return CreatedAtAction(nameof(GetFoundPets), new FoundPetReportDto(report.Id, report.PetType, report.Description, report.FoundPlace, report.FoundDateUtc, report.PhotoUrl, report.ContactName, report.ContactPhone, report.Status));
     }
 
+    [Authorize]
     [HttpGet("notifications/{userId:int}")]
     public async Task<ActionResult<IEnumerable<NotificationDto>>> GetNotifications(int userId)
     {
+        if (!this.CanAccessUser(userId))
+        {
+            return Forbid();
+        }
+
         var notifications = await context.Notifications
             .Where(notification => notification.UserId == userId)
             .OrderByDescending(notification => notification.TriggerDateUtc)

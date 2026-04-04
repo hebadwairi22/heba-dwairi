@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareJordan.Api.Data;
@@ -8,6 +9,7 @@ namespace PetCareJordan.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AdoptionsController(PetCareJordanContext context) : ControllerBase
 {
     [HttpGet]

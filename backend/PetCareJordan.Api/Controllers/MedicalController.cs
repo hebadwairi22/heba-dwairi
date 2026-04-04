@@ -1,13 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCareJordan.Api.Data;
 using PetCareJordan.Api.Dtos;
 using PetCareJordan.Api.Models;
+using PetCareJordan.Api.Services;
 
 namespace PetCareJordan.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class MedicalController(PetCareJordanContext context) : ControllerBase
 {
     [HttpGet("upcoming-vaccines")]
@@ -36,6 +39,11 @@ public class MedicalController(PetCareJordanContext context) : ControllerBase
     [HttpPost("records")]
     public async Task<ActionResult<MedicalRecordDto>> CreateMedicalRecord(CreateMedicalRecordRequest request)
     {
+        if (!this.CanManageVetCase(request.VetId))
+        {
+            return Forbid();
+        }
+
         var vet = await context.Users.FirstOrDefaultAsync(item => item.Id == request.VetId && item.Role == UserRole.Vet);
         var pet = await context.Pets.FindAsync(request.PetId);
 
@@ -80,5 +88,39 @@ public class MedicalController(PetCareJordanContext context) : ControllerBase
         await context.SaveChangesAsync();
 
         return Ok(new MedicalRecordDto(record.Id, record.Vet.FullName, record.VisitReason, record.Diagnosis, record.Treatment, record.VisitDateUtc));
+    }
+
+    [HttpPost("vaccinations")]
+    public async Task<ActionResult<VaccinationDto>> CreateVaccination(CreateVaccinationRequest request)
+    {
+        if (!this.CanManageVetCase(request.VetId))
+        {
+            return Forbid();
+        }
+
+        var vet = await context.Users.FirstOrDefaultAsync(item => item.Id == request.VetId && item.Role == UserRole.Vet);
+        var pet = await context.Pets.FindAsync(request.PetId);
+
+        if (vet is null || pet is null)
+        {
+            return BadRequest("Valid pet and vet are required.");
+        }
+
+        var vaccination = new VaccinationRecord
+        {
+            PetId = request.PetId,
+            VetId = request.VetId,
+            VaccineName = request.VaccineName,
+            GivenOnUtc = request.GivenOnUtc,
+            DueDateUtc = request.DueDateUtc,
+            IsCompleted = request.IsCompleted
+        };
+
+        context.VaccinationRecords.Add(vaccination);
+        await context.SaveChangesAsync();
+
+        return CreatedAtAction(
+            nameof(CreateVaccination),
+            new VaccinationDto(vaccination.Id, vet.FullName, vaccination.VaccineName, vaccination.GivenOnUtc, vaccination.DueDateUtc, vaccination.IsCompleted));
     }
 }
