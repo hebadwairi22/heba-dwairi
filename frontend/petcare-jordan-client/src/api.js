@@ -120,5 +120,12 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
+    }),
+  getOwnerMessages: (adoptionListingId) => request(`/ownerchat/${adoptionListingId}`),
+  sendOwnerMessage: (payload) =>
+    request("/ownerchat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     })
 };

@@ -82,7 +82,7 @@ function AuthPanel({ currentUser, authMode, setAuthMode, loginForm, setLoginForm
           <button type="button" className="toggle active" onClick={() => setLanguage(language === "ar" ? "en" : "ar")}>{language === "ar" ? "EN" : "AR"}</button>
         </div>
         <strong>{currentUser ? currentUser.fullName : text.auth.signInPrompt}</strong>
-        <p>{currentUser ? `${currentUser.role} account in ${currentUser.city}` : text.auth.samplePrompt}</p>
+        <p>{currentUser ? interpolate(text.common.accountRole, {role: currentUser.role, city: currentUser.city}) : text.auth.samplePrompt}</p>
       </div>
       {!currentUser ? (
         <>
@@ -125,7 +125,7 @@ function AuthPanel({ currentUser, authMode, setAuthMode, loginForm, setLoginForm
 }
 
 function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, onSendMessage }) {
-  if (!details) return <p className="empty-state">Select an appointment to open the case details and chat.</p>;
+  if (!details) return <p className="empty-state">{text.common.selectAppointmentChat}</p>;
   return (
     <div className="list-stack">
       <article className="list-card">
@@ -133,8 +133,8 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
         <p>{details.appointment.reason}</p>
         <div className="meta-line"><span>{details.appointment.ownerName}</span><span>{details.appointment.vetName}</span></div>
         <div className="meta-line"><span>{details.appointment.status}</span><span>{formatDateTime(details.appointment.preferredDateUtc, language)}</span></div>
-        {details.appointment.ownerNotes ? <p>Owner note: {details.appointment.ownerNotes}</p> : null}
-        {details.appointment.vetNotes ? <p>Vet note: {details.appointment.vetNotes}</p> : null}
+        {details.appointment.ownerNotes ? <p>{text.common.ownerNote}: {details.appointment.ownerNotes}</p> : null}
+        {details.appointment.vetNotes ? <p>{text.common.vetNote}: {details.appointment.vetNotes}</p> : null}
       </article>
       <div className="list-stack">
         {details.messages.map((item) => (
@@ -147,8 +147,8 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
       </div>
       {currentUser ? (
         <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSendMessage(); }}>
-          <textarea value={messageDraft} placeholder="Write a message..." onChange={(event) => setMessageDraft(event.target.value)} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-          <button type="submit">Send message</button>
+          <textarea value={messageDraft} placeholder={text.common.writeMessage} onChange={(event) => setMessageDraft(event.target.value)} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+          <button type="submit">{text.common.sendMessage}</button>
         </form>
       ) : null}
     </div>
@@ -191,6 +191,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [ownerChatListingId, setOwnerChatListingId] = useState(null);
+  const [ownerMessages, setOwnerMessages] = useState([]);
+  const [ownerMsgDraft, setOwnerMsgDraft] = useState("");
   const [authMode, setAuthMode] = useState("login");
   const [loginForm, setLoginForm] = useState({ email: demoCredentials[0].email, password: demoCredentials[0].password });
   const [registerForm, setRegisterForm] = useState(emptyRegisterForm);
@@ -209,7 +212,19 @@ function App() {
 
   useEffect(() => {
     async function loadData() {
-      if (!currentUser) {
+    
+  // Owner chat
+  async function loadOwnerChat(listingId) {
+    setOwnerChatListingId(listingId);
+    try { const msgs = await api.getOwnerMessages(listingId); setOwnerMessages(msgs); } catch { setOwnerMessages([]); }
+  }
+  async function handleSendOwnerMessage(event) {
+    event.preventDefault();
+    if (!ownerMsgDraft.trim() || !ownerChatListingId) return;
+    try { await api.sendOwnerMessage({ adoptionListingId: ownerChatListingId, message: ownerMsgDraft }); setOwnerMsgDraft(""); loadOwnerChat(ownerChatListingId); } catch { setError(text.errors?.messageSend || "Could not send message."); }
+  }
+
+  if (!currentUser) {
         setLoading(false);
         return;
       }
@@ -510,13 +525,13 @@ function App() {
         <main className="main-content">
           <header className="hero" style={{ gridTemplateColumns: "1.2fr 420px", minHeight: "calc(100vh - 56px)", alignItems: "center" }}>
             <div className="hero-copy">
-              <span className="kicker">PetCare Jordan</span>
+              <span className="kicker">{text.landing.kicker}</span>
               <h2>{text.landing.title}</h2>
               <p>{text.landing.subtitle}</p>
               <div className="hero-notes">
-                <div><strong>Owner</strong><span>pets, adoption, reports, appointments</span></div>
-                <div><strong>Vet</strong><span>cases, chat, medical records, vaccines</span></div>
-                <div><strong>Admin</strong><span>users, roles, reports, workflow oversight</span></div>
+                <div><strong>{text.landing.roleOwner}</strong><span>{text.landing.roleOwnerDesc}</span></div>
+                <div><strong>{text.landing.roleVet}</strong><span>{text.landing.roleVetDesc}</span></div>
+                <div><strong>{text.landing.roleAdmin}</strong><span>{text.landing.roleAdminDesc}</span></div>
               </div>
             </div>
 
@@ -583,9 +598,9 @@ function App() {
             <p>{text.shell.heroSubtitle}</p>
             {dashboard ? (
               <div className="hero-notes">
-                <div><strong>{dashboard.totalPets}</strong><span>registered pets</span></div>
-                <div><strong>{notifications.length}</strong><span>notifications for this account</span></div>
-                <div><strong>{currentUser?.role ?? text.common.guest}</strong><span>{language === "ar" ? "الواجهة الحالية" : "current view"}</span></div>
+                <div><strong>{dashboard.totalPets}</strong><span>{text.common.registeredPets}</span></div>
+                <div><strong>{notifications.length}</strong><span>{text.common.notificationsForAccount}</span></div>
+                <div><strong>{currentUser?.role ?? text.common.guest}</strong><span>{text.common.currentView}</span></div>
               </div>
             ) : null}
           </div>
@@ -608,7 +623,7 @@ function App() {
         </header>
 
         {error ? <div className="alert">{error}</div> : null}
-        {loading ? <div className="section-card">Loading project data...</div> : null}
+        {loading ? <div className="section-card">{text.common.loadingData}</div> : null}
 
         {!loading && dashboard ? (
           <Routes>
@@ -616,10 +631,10 @@ function App() {
               <div className="content-grid">
                 <SectionCard title={text.home.overviewTitle}>
                   <div className="stats-grid">
-                    <article className="stat-card"><strong>{dashboard.totalUsers}</strong><span>owners and admins</span></article>
-                    <article className="stat-card"><strong>{dashboard.totalVets}</strong><span>veterinarians</span></article>
-                    <article className="stat-card"><strong>{dashboard.upcomingVaccines}</strong><span>upcoming vaccines</span></article>
-                    <article className="stat-card"><strong>{dashboard.petsForAdoption}</strong><span>adoption cases</span></article>
+                    <article className="stat-card"><strong>{dashboard.totalUsers}</strong><span>{text.common.ownersAndAdmins}</span></article>
+                    <article className="stat-card"><strong>{dashboard.totalVets}</strong><span>{text.common.veterinarians}</span></article>
+                    <article className="stat-card"><strong>{dashboard.upcomingVaccines}</strong><span>{text.common.upcomingVaccines}</span></article>
+                    <article className="stat-card"><strong>{dashboard.petsForAdoption}</strong><span>{text.common.adoptionCases}</span></article>
                   </div>
                 </SectionCard>
 
@@ -650,14 +665,14 @@ function App() {
                           </article>
                         ))}
                       </div>
-                    ) : <p className="empty-state">Sign in to view account-specific updates.</p>}
+                    ) : <p className="empty-state">{text.common.signInForUpdates}</p>}
                   </SectionCard>
                 </div>
 
                 <div className="split-grid">
                   <SectionCard title={text.home.cityTitle}>
                     <div className="city-grid">
-                      {cityCoverage.map(([city, value]) => <article key={city} className="city-card"><strong>{city}</strong><span>{value} pets</span></article>)}
+                      {cityCoverage.map(([city, value]) => <article key={city} className="city-card"><strong>{city}</strong><span>{interpolate(text.common.petsInCity, {count: value})}</span></article>)}
                     </div>
                   </SectionCard>
                   <SectionCard title={text.home.typesTitle}>
@@ -679,17 +694,17 @@ function App() {
                 <SectionCard title={text.appointments.requestTitle}>
                   <form className="auth-form" onSubmit={handleCreateAppointment}>
                     <select value={appointmentForm.petId} onChange={(event) => setAppointmentForm((current) => ({ ...current, petId: event.target.value }))}>
-                      <option value="">Select pet</option>
+                      <option value="">{text.common.selectPet}</option>
                       {ownPets.map((pet) => <option key={pet.id} value={pet.id}>{pet.name} | {pet.collarId}</option>)}
                     </select>
                     <select value={appointmentForm.vetId} onChange={(event) => setAppointmentForm((current) => ({ ...current, vetId: event.target.value }))}>
-                      <option value="">Select vet</option>
+                      <option value="">{text.common.selectVet}</option>
                       {vets.map((vet) => <option key={vet.id} value={vet.id}>{vet.fullName} | {vet.city}</option>)}
                     </select>
                     <input type="datetime-local" value={appointmentForm.preferredDateUtc} onChange={(event) => setAppointmentForm((current) => ({ ...current, preferredDateUtc: event.target.value }))} />
-                    <input type="text" placeholder="Reason for visit" value={appointmentForm.reason} onChange={(event) => setAppointmentForm((current) => ({ ...current, reason: event.target.value }))} />
-                    <textarea value={appointmentForm.ownerNotes} placeholder="Extra notes for the vet" onChange={(event) => setAppointmentForm((current) => ({ ...current, ownerNotes: event.target.value }))} style={{ minHeight: 110, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-                    <button type="submit">Send request</button>
+                    <input type="text" placeholder={text.appointments.reasonPlaceholder} value={appointmentForm.reason} onChange={(event) => setAppointmentForm((current) => ({ ...current, reason: event.target.value }))} />
+                    <textarea value={appointmentForm.ownerNotes} placeholder={text.appointments.notesPlaceholder} onChange={(event) => setAppointmentForm((current) => ({ ...current, ownerNotes: event.target.value }))} style={{ minHeight: 110, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                    <button type="submit">{text.appointments.sendRequest}</button>
                   </form>
                 </SectionCard>
 
@@ -700,49 +715,49 @@ function App() {
                         <strong>{item.petName}</strong>
                         <p>{item.reason}</p>
                         <div className="meta-line"><span>{item.vetName}</span><span>{item.status}</span></div>
-                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{item.messageCount} messages</span></div>
+                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{interpolate(text.common.messagesCount, {n: item.messageCount})}</span></div>
                       </article>
                     ))}
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Case chat">
+                <SectionCard title={text.appointments.chatTitle}>
                   <AppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={setMessageDraft} onSendMessage={handleSendMessage} />
                 </SectionCard>
               </div>
             </> : null} />
             <Route path="/appointments" element={currentUser?.role === "Vet" ? <>
               <div className="split-grid">
-                <SectionCard title="Assigned cases">
+                <SectionCard title={text.appointments.vetCasesTitle}>
                   <div className="list-stack">
                     {vetAppointments.map((item) => (
                       <article key={item.id} className="list-card" onClick={() => setSelectedAppointmentId(item.id)} style={{ cursor: "pointer" }}>
                         <strong>{item.petName}</strong>
                         <p>{item.reason}</p>
                         <div className="meta-line"><span>{item.ownerName}</span><span>{item.status}</span></div>
-                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{item.messageCount} messages</span></div>
+                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{interpolate(text.common.messagesCount, {n: item.messageCount})}</span></div>
                       </article>
                     ))}
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Update case status">
+                <SectionCard title={text.appointments.statusTitle}>
                   {appointmentDetails ? (
                     <form className="auth-form" onSubmit={handleUpdateAppointmentStatus}>
                       <select value={vetStatusForm.status} onChange={(event) => setVetStatusForm((current) => ({ ...current, status: event.target.value }))}>
-                        <option value="Pending">Pending</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="InProgress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
+                        <option value="Pending">{text.appointments.statusPending}</option>
+                        <option value="Confirmed">{text.appointments.statusConfirmed}</option>
+                        <option value="InProgress">{text.appointments.statusInProgress}</option>
+                        <option value="Completed">{text.appointments.statusCompleted}</option>
+                        <option value="Cancelled">{text.appointments.statusCancelled}</option>
                       </select>
-                      <textarea value={vetStatusForm.vetNotes} placeholder="Vet notes" onChange={(event) => setVetStatusForm((current) => ({ ...current, vetNotes: event.target.value }))} style={{ minHeight: 120, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-                      <button type="submit">Update appointment</button>
+                      <textarea value={vetStatusForm.vetNotes} placeholder={text.appointments.vetNotesPlaceholder} onChange={(event) => setVetStatusForm((current) => ({ ...current, vetNotes: event.target.value }))} style={{ minHeight: 120, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                      <button type="submit">{text.common.updateAppointment}</button>
                     </form>
-                  ) : <p className="empty-state">Select a case first.</p>}
+                  ) : <p className="empty-state">{text.common.selectCaseFirst}</p>}
                 </SectionCard>
 
-                <SectionCard title="Case chat">
+                <SectionCard title={text.appointments.chatTitle}>
                   <AppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={setMessageDraft} onSendMessage={handleSendMessage} />
                 </SectionCard>
 
@@ -757,21 +772,21 @@ function App() {
                           <span>{item.treatment}</span>
                         </article>
                       ))}
-                      {petDetails.medicalHistory.length === 0 ? <p className="empty-state">No medical history yet for this pet.</p> : null}
+                      {petDetails.medicalHistory.length === 0 ? <p className="empty-state">{text.common.noMedicalHistory}</p> : null}
                     </div>
-                  ) : <p className="empty-state">Select a case first.</p>}
+                  ) : <p className="empty-state">{text.common.selectCaseFirst}</p>}
                 </SectionCard>
 
                 <SectionCard title={text.appointments.addMedicalTitle}>
                   {petDetails ? (
                     <form className="auth-form" onSubmit={handleCreateMedicalRecord}>
-                      <input type="text" placeholder="Visit reason" value={medicalForm.visitReason} onChange={(event) => setMedicalForm((current) => ({ ...current, visitReason: event.target.value }))} />
-                      <input type="text" placeholder="Diagnosis" value={medicalForm.diagnosis} onChange={(event) => setMedicalForm((current) => ({ ...current, diagnosis: event.target.value }))} />
-                      <textarea value={medicalForm.treatment} placeholder="Treatment" onChange={(event) => setMedicalForm((current) => ({ ...current, treatment: event.target.value }))} style={{ minHeight: 110, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                      <input type="text" placeholder={text.appointments.visitReasonPh} value={medicalForm.visitReason} onChange={(event) => setMedicalForm((current) => ({ ...current, visitReason: event.target.value }))} />
+                      <input type="text" placeholder={text.appointments.diagnosisPh} value={medicalForm.diagnosis} onChange={(event) => setMedicalForm((current) => ({ ...current, diagnosis: event.target.value }))} />
+                      <textarea value={medicalForm.treatment} placeholder={text.appointments.treatmentPh} onChange={(event) => setMedicalForm((current) => ({ ...current, treatment: event.target.value }))} style={{ minHeight: 110, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
                       <input type="datetime-local" value={medicalForm.visitDateUtc} onChange={(event) => setMedicalForm((current) => ({ ...current, visitDateUtc: event.target.value }))} />
-                      <button type="submit">Add medical record</button>
+                      <button type="submit">{text.common.addMedicalRecord}</button>
                     </form>
-                  ) : <p className="empty-state">Select a case first.</p>}
+                  ) : <p className="empty-state">{text.common.selectCaseFirst}</p>}
                 </SectionCard>
 
                 <SectionCard title={text.appointments.vaccinesTitle}>
@@ -780,28 +795,28 @@ function App() {
                       {petDetails.vaccines.map((item) => (
                         <article key={item.id} className="list-card">
                           <strong>{item.vaccineName}</strong>
-                          <p>{item.isCompleted ? "Completed" : "Pending"}</p>
-                          <div className="meta-line"><span>{item.vetName}</span><span>Due {formatDate(item.dueDateUtc, language)}</span></div>
+                          <p>{item.isCompleted ? text.common.completed : text.common.pending}</p>
+                          <div className="meta-line"><span>{item.vetName}</span><span>{text.common.due} {formatDate(item.dueDateUtc, language)}</span></div>
                         </article>
                       ))}
-                      {petDetails.vaccines.length === 0 ? <p className="empty-state">No vaccines recorded yet for this pet.</p> : null}
+                      {petDetails.vaccines.length === 0 ? <p className="empty-state">{text.common.noVaccinesRecorded}</p> : null}
                     </div>
-                  ) : <p className="empty-state">Select a case first.</p>}
+                  ) : <p className="empty-state">{text.common.selectCaseFirst}</p>}
                 </SectionCard>
 
                 <SectionCard title={text.appointments.addVaccineTitle}>
                   {petDetails ? (
                     <form className="auth-form" onSubmit={handleCreateVaccination}>
-                      <input type="text" placeholder="Vaccine name" value={vaccineForm.vaccineName} onChange={(event) => setVaccineForm((current) => ({ ...current, vaccineName: event.target.value }))} />
+                      <input type="text" placeholder={text.appointments.vaccineNamePh} value={vaccineForm.vaccineName} onChange={(event) => setVaccineForm((current) => ({ ...current, vaccineName: event.target.value }))} />
                       <input type="datetime-local" value={vaccineForm.givenOnUtc} onChange={(event) => setVaccineForm((current) => ({ ...current, givenOnUtc: event.target.value }))} />
                       <input type="datetime-local" value={vaccineForm.dueDateUtc} onChange={(event) => setVaccineForm((current) => ({ ...current, dueDateUtc: event.target.value }))} />
                       <label style={{ color: "#5d6b78", display: "flex", gap: 8, alignItems: "center" }}>
                         <input type="checkbox" checked={vaccineForm.isCompleted} onChange={(event) => setVaccineForm((current) => ({ ...current, isCompleted: event.target.checked }))} />
-                        Mark as completed
+                        {text.appointments.markCompleted}
                       </label>
-                      <button type="submit">Add vaccination</button>
+                      <button type="submit">{text.common.addVaccination}</button>
                     </form>
-                  ) : <p className="empty-state">Select a case first.</p>}
+                  ) : <p className="empty-state">{text.common.selectCaseFirst}</p>}
                 </SectionCard>
               </div>
             </> : null} />
@@ -809,10 +824,10 @@ function App() {
               <div className="content-grid">
                 <SectionCard title={text.admin.summaryTitle}>
                   <div className="stats-grid">
-                    <article className="stat-card"><strong>{adminSummary?.totalAppointments ?? 0}</strong><span>total appointments</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.pendingAppointments ?? 0}</strong><span>pending requests</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.activeVetCases ?? 0}</strong><span>active cases</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.totalMessages ?? 0}</strong><span>chat messages</span></article>
+                    <article className="stat-card"><strong>{adminSummary?.totalAppointments ?? 0}</strong><span>{text.admin.totalAppt}</span></article>
+                    <article className="stat-card"><strong>{adminSummary?.pendingAppointments ?? 0}</strong><span>{text.admin.pendingAppt}</span></article>
+                    <article className="stat-card"><strong>{adminSummary?.activeVetCases ?? 0}</strong><span>{text.admin.activeCases}</span></article>
+                    <article className="stat-card"><strong>{adminSummary?.totalMessages ?? 0}</strong><span>{text.admin.totalMsg}</span></article>
                   </div>
                 </SectionCard>
 
@@ -837,11 +852,11 @@ function App() {
                           <strong>{item.fullName}</strong>
                           <p>{item.email}</p>
                           <div className="meta-line"><span>{item.city}</span><span>{item.phoneNumber}</span></div>
-                          <div className="meta-line"><span>{item.ownedPetCount} pets</span><span>{item.ownerAppointmentCount + item.vetAppointmentCount} appointments</span></div>
+                          <div className="meta-line"><span>{interpolate(text.admin.userPets, {n: item.ownedPetCount})}</span><span>{interpolate(text.admin.userAppts, {n: item.ownerAppointmentCount + item.vetAppointmentCount})}</span></div>
                           <select value={item.role} onChange={(event) => handleAdminRoleChange(item.id, event.target.value)}>
-                            <option value="User">User</option>
-                            <option value="Vet">Vet</option>
-                            <option value="Admin">Admin</option>
+                            <option value="User">{text.common.user}</option>
+                            <option value="Vet">{text.common.vet}</option>
+                            <option value="Admin">{text.common.admin}</option>
                           </select>
                         </article>
                       ))}
@@ -857,8 +872,8 @@ function App() {
                           <div className="meta-line"><span>{item.place}</span><span>{formatDate(item.reportDateUtc, language)}</span></div>
                           <div className="meta-line"><span>{item.contactName}</span><span>{item.contactPhone}</span></div>
                           <select value={item.status} onChange={(event) => handleAdminReportStatus(item.reportKind, item.id, event.target.value)}>
-                            <option value="Active">Active</option>
-                            <option value="Resolved">Resolved</option>
+                            <option value="Active">{text.admin.reportActive}</option>
+                            <option value="Resolved">{text.admin.reportResolved}</option>
                           </select>
                         </article>
                       ))}
@@ -872,53 +887,53 @@ function App() {
                 {currentUser?.role === "User" ? (
                   <SectionCard title={text.adoption.addTitle}>
                     <form className="auth-form" onSubmit={handleCreatePet}>
-                      <input type="text" placeholder="Pet name" value={petForm.name} onChange={(event) => setPetForm((current) => ({ ...current, name: event.target.value }))} />
+                      <input type="text" placeholder={text.adoption.namePh} value={petForm.name} onChange={(event) => setPetForm((current) => ({ ...current, name: event.target.value }))} />
                       <div className="split-grid">
                         <select value={petForm.type} onChange={(event) => setPetForm((current) => ({ ...current, type: event.target.value }))}>
-                          <option value="Cat">Cat</option>
-                          <option value="Dog">Dog</option>
-                          <option value="Bird">Bird</option>
-                          <option value="Rabbit">Rabbit</option>
-                          <option value="Other">Other</option>
+                          <option value="Cat">{text.petTypes.Cat}</option>
+                          <option value="Dog">{text.petTypes.Dog}</option>
+                          <option value="Bird">{text.petTypes.Bird}</option>
+                          <option value="Rabbit">{text.petTypes.Rabbit}</option>
+                          <option value="Other">{text.petTypes.Other}</option>
                         </select>
                         <select value={petForm.gender} onChange={(event) => setPetForm((current) => ({ ...current, gender: event.target.value }))}>
-                          <option value="Male">Male</option>
-                          <option value="Female">Female</option>
+                          <option value="Male">{text.petGender.Male}</option>
+                          <option value="Female">{text.petGender.Female}</option>
                         </select>
                       </div>
-                      <input type="text" placeholder="Breed" value={petForm.breed} onChange={(event) => setPetForm((current) => ({ ...current, breed: event.target.value }))} />
+                      <input type="text" placeholder={text.adoption.breedPh} value={petForm.breed} onChange={(event) => setPetForm((current) => ({ ...current, breed: event.target.value }))} />
                       <div className="split-grid">
-                        <input type="number" placeholder="Age in months" value={petForm.ageInMonths} onChange={(event) => setPetForm((current) => ({ ...current, ageInMonths: event.target.value }))} />
-                        <input type="number" step="0.1" placeholder="Weight in kg" value={petForm.weightKg} onChange={(event) => setPetForm((current) => ({ ...current, weightKg: event.target.value }))} />
+                        <input type="number" placeholder={text.adoption.agePh} value={petForm.ageInMonths} onChange={(event) => setPetForm((current) => ({ ...current, ageInMonths: event.target.value }))} />
+                        <input type="number" step="0.1" placeholder={text.adoption.weightPh} value={petForm.weightKg} onChange={(event) => setPetForm((current) => ({ ...current, weightKg: event.target.value }))} />
                       </div>
-                      <input type="text" placeholder="Collar ID" value={petForm.collarId} onChange={(event) => setPetForm((current) => ({ ...current, collarId: event.target.value }))} />
+                      <input type="text" placeholder={text.adoption.collarPh} value={petForm.collarId} onChange={(event) => setPetForm((current) => ({ ...current, collarId: event.target.value }))} />
                       <div className="split-grid">
-                        <input type="text" placeholder="Color" value={petForm.color} onChange={(event) => setPetForm((current) => ({ ...current, color: event.target.value }))} />
-                        <input type="text" placeholder="City" value={petForm.city} onChange={(event) => setPetForm((current) => ({ ...current, city: event.target.value }))} />
+                        <input type="text" placeholder={text.adoption.colorPh} value={petForm.color} onChange={(event) => setPetForm((current) => ({ ...current, color: event.target.value }))} />
+                        <input type="text" placeholder={text.adoption.cityPh} value={petForm.city} onChange={(event) => setPetForm((current) => ({ ...current, city: event.target.value }))} />
                       </div>
-                      <input type="text" placeholder="Photo URL" value={petForm.photoUrl} onChange={(event) => setPetForm((current) => ({ ...current, photoUrl: event.target.value }))} />
-                      <textarea value={petForm.description} placeholder="Description" onChange={(event) => setPetForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                      <input type="text" placeholder={text.adoption.photoPh} value={petForm.photoUrl} onChange={(event) => setPetForm((current) => ({ ...current, photoUrl: event.target.value }))} />
+                      <textarea value={petForm.description} placeholder={text.adoption.descPh} onChange={(event) => setPetForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
                       <label style={{ color: "#5d6b78", display: "flex", gap: 8, alignItems: "center" }}>
                         <input type="checkbox" checked={petForm.isNeutered} onChange={(event) => setPetForm((current) => ({ ...current, isNeutered: event.target.checked }))} />
-                        Neutered
+                        {text.adoption.neutered}
                       </label>
                       <label style={{ color: "#5d6b78", display: "flex", gap: 8, alignItems: "center" }}>
                         <input type="checkbox" checked={petForm.publishForAdoption} onChange={(event) => setPetForm((current) => ({ ...current, publishForAdoption: event.target.checked }))} />
-                        Publish for adoption
+                        {text.adoption.publishAdoption}
                       </label>
                       {petForm.publishForAdoption ? (
                         <>
-                          <textarea value={petForm.adoptionStory} placeholder="Adoption story" onChange={(event) => setPetForm((current) => ({ ...current, adoptionStory: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                          <textarea value={petForm.adoptionStory} placeholder={text.adoption.storyPh} onChange={(event) => setPetForm((current) => ({ ...current, adoptionStory: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
                           <div className="split-grid">
                             <select value={petForm.contactMethod} onChange={(event) => setPetForm((current) => ({ ...current, contactMethod: event.target.value }))}>
-                              <option value="Phone">Phone</option>
-                              <option value="Email">Email</option>
+                              <option value="Phone">{text.adoption.contactPhone}</option>
+                              <option value="Email">{text.adoption.contactEmail}</option>
                             </select>
-                            <input type="text" placeholder="Contact details" value={petForm.contactDetails} onChange={(event) => setPetForm((current) => ({ ...current, contactDetails: event.target.value }))} />
+                            <input type="text" placeholder={text.adoption.contactDetailsPh} value={petForm.contactDetails} onChange={(event) => setPetForm((current) => ({ ...current, contactDetails: event.target.value }))} />
                           </div>
                         </>
                       ) : null}
-                      <button type="submit">Save pet</button>
+                      <button type="submit">{text.common.savePet}</button>
                     </form>
                   </SectionCard>
                 ) : null}
@@ -934,10 +949,10 @@ function App() {
                               <h4>{item.petName}</h4>
                               <span>{item.petType} | {item.breed}</span>
                             </div>
-                            <span className={item.status === "Available" ? "pill success" : "pill warning"}>{item.status}</span>
+                            <span className={item.status === "Available" ? "pill success" : "pill warning"}>{item.status === "Available" ? text.adoption.statusAvailable : text.adoption.statusPending}</span>
                           </div>
                           <p>{item.story}</p>
-                          <div className="meta-line"><span>{item.city}</span><span>{item.contactDetails}</span></div>
+                          <div className="meta-line"><span>{item.city}</span><button type="button" onClick={() => alert(text.adoption.adoptContact + "\n\n" + item.contactDetails)} style={{padding:"6px 14px",fontSize:"0.85rem",background:"rgba(59,130,246,0.1)",color:"#3b82f6",borderRadius:"8px",fontWeight:"bold"}}>{text.adoption.adoptBtn}</button><button type="button" onClick={() => loadOwnerChat(item.id)} style={{padding:"6px 14px",fontSize:"0.85rem",background:"rgba(16,185,129,0.1)",color:"#10b981",borderRadius:"8px",fontWeight:"bold"}}>{language === "ar" ? "محادثة" : "Chat"}</button></div>
                         </div>
                       </article>
                     ))}
@@ -951,48 +966,48 @@ function App() {
                   <SectionCard title={text.community.createTitle}>
                     <div className="list-stack">
                       <form className="auth-form" onSubmit={handleCreateLostReport}>
-                        <strong>Lost pet report</strong>
-                        <input type="text" placeholder="Pet name" value={lostForm.petName} onChange={(event) => setLostForm((current) => ({ ...current, petName: event.target.value }))} />
+                        <strong>{text.community.lostHeading}</strong>
+                        <input type="text" placeholder={text.adoption.namePh} value={lostForm.petName} onChange={(event) => setLostForm((current) => ({ ...current, petName: event.target.value }))} />
                         <select value={lostForm.petType} onChange={(event) => setLostForm((current) => ({ ...current, petType: event.target.value }))}>
-                          <option value="Cat">Cat</option>
-                          <option value="Dog">Dog</option>
-                          <option value="Bird">Bird</option>
-                          <option value="Rabbit">Rabbit</option>
-                          <option value="Other">Other</option>
+                          <option value="Cat">{text.petTypes.Cat}</option>
+                          <option value="Dog">{text.petTypes.Dog}</option>
+                          <option value="Bird">{text.petTypes.Bird}</option>
+                          <option value="Rabbit">{text.petTypes.Rabbit}</option>
+                          <option value="Other">{text.petTypes.Other}</option>
                         </select>
-                        <textarea value={lostForm.description} placeholder="Description" onChange={(event) => setLostForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                        <textarea value={lostForm.description} placeholder={text.adoption.descPh} onChange={(event) => setLostForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
                         <div className="split-grid">
-                          <input type="number" placeholder="Approx age in months" value={lostForm.approximateAgeInMonths} onChange={(event) => setLostForm((current) => ({ ...current, approximateAgeInMonths: event.target.value }))} />
-                          <input type="number" placeholder="Reward amount" value={lostForm.rewardAmount} onChange={(event) => setLostForm((current) => ({ ...current, rewardAmount: event.target.value }))} />
+                          <input type="number" placeholder={text.community.approxAgePh} value={lostForm.approximateAgeInMonths} onChange={(event) => setLostForm((current) => ({ ...current, approximateAgeInMonths: event.target.value }))} />
+                          <input type="number" placeholder={text.community.rewardPh} value={lostForm.rewardAmount} onChange={(event) => setLostForm((current) => ({ ...current, rewardAmount: event.target.value }))} />
                         </div>
-                        <input type="text" placeholder="Last seen place" value={lostForm.lastSeenPlace} onChange={(event) => setLostForm((current) => ({ ...current, lastSeenPlace: event.target.value }))} />
+                        <input type="text" placeholder={text.community.lastSeenPh} value={lostForm.lastSeenPlace} onChange={(event) => setLostForm((current) => ({ ...current, lastSeenPlace: event.target.value }))} />
                         <input type="datetime-local" value={lostForm.lastSeenDateUtc} onChange={(event) => setLostForm((current) => ({ ...current, lastSeenDateUtc: event.target.value }))} />
-                        <input type="text" placeholder="Photo URL" value={lostForm.photoUrl} onChange={(event) => setLostForm((current) => ({ ...current, photoUrl: event.target.value }))} />
+                        <input type="text" placeholder={text.adoption.photoPh} value={lostForm.photoUrl} onChange={(event) => setLostForm((current) => ({ ...current, photoUrl: event.target.value }))} />
                         <div className="split-grid">
-                          <input type="text" placeholder="Contact name" value={lostForm.contactName} onChange={(event) => setLostForm((current) => ({ ...current, contactName: event.target.value }))} />
-                          <input type="text" placeholder="Contact phone" value={lostForm.contactPhone} onChange={(event) => setLostForm((current) => ({ ...current, contactPhone: event.target.value }))} />
+                          <input type="text" placeholder={text.community.contactNamePh} value={lostForm.contactName} onChange={(event) => setLostForm((current) => ({ ...current, contactName: event.target.value }))} />
+                          <input type="text" placeholder={text.community.contactPhonePh} value={lostForm.contactPhone} onChange={(event) => setLostForm((current) => ({ ...current, contactPhone: event.target.value }))} />
                         </div>
-                        <button type="submit">Post lost report</button>
+                        <button type="submit">{text.common.postLost}</button>
                       </form>
 
                       <form className="auth-form" onSubmit={handleCreateFoundReport}>
-                        <strong>Found pet report</strong>
+                        <strong>{text.community.foundHeading}</strong>
                         <select value={foundForm.petType} onChange={(event) => setFoundForm((current) => ({ ...current, petType: event.target.value }))}>
-                          <option value="Cat">Cat</option>
-                          <option value="Dog">Dog</option>
-                          <option value="Bird">Bird</option>
-                          <option value="Rabbit">Rabbit</option>
-                          <option value="Other">Other</option>
+                          <option value="Cat">{text.petTypes.Cat}</option>
+                          <option value="Dog">{text.petTypes.Dog}</option>
+                          <option value="Bird">{text.petTypes.Bird}</option>
+                          <option value="Rabbit">{text.petTypes.Rabbit}</option>
+                          <option value="Other">{text.petTypes.Other}</option>
                         </select>
-                        <textarea value={foundForm.description} placeholder="Description" onChange={(event) => setFoundForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-                        <input type="text" placeholder="Found place" value={foundForm.foundPlace} onChange={(event) => setFoundForm((current) => ({ ...current, foundPlace: event.target.value }))} />
+                        <textarea value={foundForm.description} placeholder={text.adoption.descPh} onChange={(event) => setFoundForm((current) => ({ ...current, description: event.target.value }))} style={{ minHeight: 90, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                        <input type="text" placeholder={text.community.foundPlacePh} value={foundForm.foundPlace} onChange={(event) => setFoundForm((current) => ({ ...current, foundPlace: event.target.value }))} />
                         <input type="datetime-local" value={foundForm.foundDateUtc} onChange={(event) => setFoundForm((current) => ({ ...current, foundDateUtc: event.target.value }))} />
-                        <input type="text" placeholder="Photo URL" value={foundForm.photoUrl} onChange={(event) => setFoundForm((current) => ({ ...current, photoUrl: event.target.value }))} />
+                        <input type="text" placeholder={text.adoption.photoPh} value={foundForm.photoUrl} onChange={(event) => setFoundForm((current) => ({ ...current, photoUrl: event.target.value }))} />
                         <div className="split-grid">
-                          <input type="text" placeholder="Contact name" value={foundForm.contactName} onChange={(event) => setFoundForm((current) => ({ ...current, contactName: event.target.value }))} />
-                          <input type="text" placeholder="Contact phone" value={foundForm.contactPhone} onChange={(event) => setFoundForm((current) => ({ ...current, contactPhone: event.target.value }))} />
+                          <input type="text" placeholder={text.community.contactNamePh} value={foundForm.contactName} onChange={(event) => setFoundForm((current) => ({ ...current, contactName: event.target.value }))} />
+                          <input type="text" placeholder={text.community.contactPhonePh} value={foundForm.contactPhone} onChange={(event) => setFoundForm((current) => ({ ...current, contactPhone: event.target.value }))} />
                         </div>
-                        <button type="submit">Post found report</button>
+                        <button type="submit">{text.common.postFound}</button>
                       </form>
                     </div>
                   </SectionCard>
@@ -1007,7 +1022,7 @@ function App() {
                           <strong>{item.petName}</strong>
                           <p>{item.description}</p>
                           <div className="meta-line"><span>{item.lastSeenPlace}</span><span>{formatDate(item.lastSeenDateUtc, language)}</span></div>
-                          <div className="meta-line"><span>{item.rewardAmount ? `${item.rewardAmount} JOD reward` : "No reward listed"}</span><span>{item.contactPhone}</span></div>
+                          <div className="meta-line"><span>{item.rewardAmount ? interpolate(text.common.jodReward, {amount: item.rewardAmount}) : text.common.noRewardListed}</span><span>{item.contactPhone}</span></div>
                         </div>
                       </article>
                     ))}
@@ -1039,7 +1054,7 @@ function App() {
                       <strong>{item.petName}</strong>
                       <p>{item.vaccineName}</p>
                       <div className="meta-line"><span>{item.ownerName}</span><span>{item.ownerPhone}</span></div>
-                      <span>Due {formatDate(item.dueDateUtc, language)}</span>
+                      <span>{text.common.due} {formatDate(item.dueDateUtc, language)}</span>
                     </article>
                   ))}
                 </div>
@@ -1048,7 +1063,7 @@ function App() {
             <Route path="/registry" element={<>
               <SectionCard title={text.registry.title}>
                 <div className="search-row">
-                  <input type="search" placeholder="Try rabbit, Amman, or PCJ-1001" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+                  <input type="search" placeholder={text.registry.searchPh} value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
                 </div>
                 <div className="registry-grid">
                   {filteredPets.map((pet) => (
@@ -1063,7 +1078,7 @@ function App() {
                           <span className="registry-code">{pet.collarId}</span>
                         </div>
                         <p>{pet.ownerName}</p>
-                        <div className="meta-line"><span>{pet.city}</span><span>{pet.adoptionStatus ?? "Not listed for adoption"}</span></div>
+                        <div className="meta-line"><span>{pet.city}</span><span>{pet.adoptionStatus ?? text.common.notListedForAdoption}</span></div>
                       </div>
                     </article>
                   ))}

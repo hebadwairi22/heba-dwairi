@@ -15,6 +15,7 @@ public class PetCareJordanContext(DbContextOptions<PetCareJordanContext> options
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AppointmentRequest> AppointmentRequests => Set<AppointmentRequest>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<OwnerMessage> OwnerMessages => Set<OwnerMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -100,6 +101,18 @@ public class PetCareJordanContext(DbContextOptions<PetCareJordanContext> options
             .HasOne(message => message.Sender)
             .WithMany(user => user.ChatMessages)
             .HasForeignKey(message => message.SenderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<OwnerMessage>()
+            .HasOne(m => m.AdoptionListing)
+            .WithMany()
+            .HasForeignKey(m => m.AdoptionListingId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OwnerMessage>()
+            .HasOne(m => m.Sender)
+            .WithMany()
+            .HasForeignKey(m => m.SenderId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
