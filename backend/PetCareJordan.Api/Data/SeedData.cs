@@ -251,7 +251,9 @@ public static class SeedData
             .ToListAsync();
 
         var petsNeedingRefresh = pets
-            .Where(pet => pet.PhotoUrl.Contains("loremflickr.com", StringComparison.OrdinalIgnoreCase))
+            .Where(pet =>
+                pet.PhotoUrl.Contains("loremflickr.com", StringComparison.OrdinalIgnoreCase)
+                || pet.PhotoUrl.StartsWith("data:image/svg+xml", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var duplicatePets = pets
@@ -278,116 +280,92 @@ public static class SeedData
         await context.SaveChangesAsync();
     }
 
+    private static readonly Dictionary<PetType, int> PhotoIndices = new();
+
     private static string GetSeedPhotoUrl(PetType type, string uniqueKey)
     {
-        var theme = type switch
+        var urls = GetPhotoPool(type, uniqueKey);
+        
+        if (!PhotoIndices.ContainsKey(type))
         {
-            PetType.Cat => "cat",
-            PetType.Dog => "dog",
-            PetType.Bird => "bird",
-            PetType.Rabbit => "rabbit",
-            _ => "pet"
-        };
-
-        if (type == PetType.Other)
-        {
-            theme = uniqueKey.EndsWith("14", StringComparison.Ordinal) ? "hamster" : "turtle";
+            PhotoIndices[type] = 0;
         }
 
-        var hash = Math.Abs(uniqueKey.GetHashCode());
-        var hue = hash % 360;
-        var accentHue = (hue + 38) % 360;
-        var illustration = theme switch
-        {
-            "cat" => """
-                <ellipse cx="470" cy="390" rx="180" ry="150" fill="#f8ece1"/>
-                <circle cx="470" cy="270" r="120" fill="#f8ece1"/>
-                <polygon points="390,185 430,95 470,190" fill="#f8ece1"/>
-                <polygon points="550,185 510,95 470,190" fill="#f8ece1"/>
-                <circle cx="425" cy="265" r="14" fill="#1f2933"/>
-                <circle cx="515" cy="265" r="14" fill="#1f2933"/>
-                <ellipse cx="470" cy="315" rx="26" ry="18" fill="#f0b98f"/>
-                <path d="M445 336 Q470 356 495 336" stroke="#1f2933" stroke-width="8" fill="none" stroke-linecap="round"/>
-                <path d="M350 300 H420 M350 330 H418 M520 300 H590 M522 330 H590" stroke="#fff7ef" stroke-width="8" stroke-linecap="round"/>
-                """,
-            "dog" => """
-                <ellipse cx="470" cy="410" rx="190" ry="150" fill="#f4e1c8"/>
-                <circle cx="470" cy="275" r="118" fill="#f4e1c8"/>
-                <ellipse cx="370" cy="245" rx="46" ry="92" transform="rotate(-20 370 245)" fill="#c98754"/>
-                <ellipse cx="570" cy="245" rx="46" ry="92" transform="rotate(20 570 245)" fill="#c98754"/>
-                <circle cx="425" cy="270" r="14" fill="#1f2933"/>
-                <circle cx="515" cy="270" r="14" fill="#1f2933"/>
-                <ellipse cx="470" cy="325" rx="44" ry="32" fill="#2f241d"/>
-                <circle cx="450" cy="315" r="10" fill="#fff"/>
-                <circle cx="490" cy="315" r="10" fill="#fff"/>
-                <path d="M445 350 Q470 372 495 350" stroke="#2f241d" stroke-width="8" fill="none" stroke-linecap="round"/>
-                """,
-            "bird" => """
-                <ellipse cx="470" cy="375" rx="160" ry="135" fill="#f8f1a8"/>
-                <circle cx="560" cy="250" r="78" fill="#f8f1a8"/>
-                <circle cx="585" cy="235" r="11" fill="#1f2933"/>
-                <polygon points="632,248 710,278 638,308" fill="#f2a93b"/>
-                <path d="M340 350 Q430 250 520 340" fill="#e4ca57"/>
-                <path d="M335 470 Q430 545 555 462" fill="#7dc0a9"/>
-                <rect x="410" y="505" width="10" height="72" rx="5" fill="#8b5e3c"/>
-                <rect x="445" y="505" width="10" height="72" rx="5" fill="#8b5e3c"/>
-                """,
-            "rabbit" => """
-                <ellipse cx="470" cy="400" rx="185" ry="145" fill="#f7f4f1"/>
-                <circle cx="470" cy="275" r="112" fill="#f7f4f1"/>
-                <ellipse cx="418" cy="135" rx="34" ry="110" transform="rotate(-10 418 135)" fill="#f7f4f1"/>
-                <ellipse cx="522" cy="135" rx="34" ry="110" transform="rotate(10 522 135)" fill="#f7f4f1"/>
-                <ellipse cx="418" cy="135" rx="14" ry="72" transform="rotate(-10 418 135)" fill="#efc7d4"/>
-                <ellipse cx="522" cy="135" rx="14" ry="72" transform="rotate(10 522 135)" fill="#efc7d4"/>
-                <circle cx="425" cy="270" r="12" fill="#1f2933"/>
-                <circle cx="515" cy="270" r="12" fill="#1f2933"/>
-                <ellipse cx="470" cy="320" rx="24" ry="18" fill="#efc7d4"/>
-                <path d="M450 340 Q470 360 490 340" stroke="#1f2933" stroke-width="8" fill="none" stroke-linecap="round"/>
-                """,
-            "hamster" => """
-                <ellipse cx="470" cy="410" rx="190" ry="150" fill="#f0ca8b"/>
-                <circle cx="470" cy="295" r="110" fill="#f0ca8b"/>
-                <circle cx="382" cy="215" r="40" fill="#f0ca8b"/>
-                <circle cx="558" cy="215" r="40" fill="#f0ca8b"/>
-                <circle cx="382" cy="215" r="18" fill="#e8a5b4"/>
-                <circle cx="558" cy="215" r="18" fill="#e8a5b4"/>
-                <circle cx="425" cy="288" r="13" fill="#1f2933"/>
-                <circle cx="515" cy="288" r="13" fill="#1f2933"/>
-                <ellipse cx="470" cy="332" rx="28" ry="20" fill="#fff7ef"/>
-                <ellipse cx="470" cy="320" rx="16" ry="12" fill="#c77f5a"/>
-                """,
-            "turtle" => """
-                <ellipse cx="470" cy="390" rx="220" ry="150" fill="#5f8f63"/>
-                <ellipse cx="470" cy="390" rx="165" ry="115" fill="#7fb27f"/>
-                <circle cx="665" cy="360" r="58" fill="#96c799"/>
-                <circle cx="682" cy="348" r="9" fill="#1f2933"/>
-                <ellipse cx="320" cy="500" rx="40" ry="28" fill="#96c799"/>
-                <ellipse cx="620" cy="500" rx="40" ry="28" fill="#96c799"/>
-                <ellipse cx="350" cy="285" rx="40" ry="28" fill="#96c799"/>
-                <ellipse cx="590" cy="285" rx="40" ry="28" fill="#96c799"/>
-                <polygon points="235,395 170,360 170,430" fill="#96c799"/>
-                """,
-            _ => """
-                <circle cx="470" cy="310" r="120" fill="#f7efe6"/>
-                <ellipse cx="470" cy="430" rx="180" ry="120" fill="#f7efe6"/>
-                """
-        };
-        var svg = $"""
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720">
-              <defs>
-                <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="hsl({hue}, 60%, 72%)"/>
-                  <stop offset="100%" stop-color="hsl({accentHue}, 55%, 48%)"/>
-                </linearGradient>
-              </defs>
-              <rect width="960" height="720" fill="url(#bg)"/>
-              <circle cx="780" cy="150" r="118" fill="rgba(255,255,255,0.16)"/>
-              <circle cx="170" cy="585" r="145" fill="rgba(255,255,255,0.10)"/>
-              <ellipse cx="470" cy="610" rx="220" ry="38" fill="rgba(31,41,51,0.12)"/>
-              {illustration}
-            </svg>
-            """;
-
-        return $"data:image/svg+xml;charset=UTF-8,{Uri.EscapeDataString(svg)}";
+        var index = PhotoIndices[type];
+        PhotoIndices[type] = (index + 1) % urls.Length;
+        return urls[index];
     }
+
+    private static string[] GetPhotoPool(PetType type, string uniqueKey)
+    {
+        if (type == PetType.Other)
+        {
+            return uniqueKey.EndsWith("14", StringComparison.Ordinal)
+                ? HamsterPhotos
+                : TurtlePhotos;
+        }
+
+        return type switch
+        {
+            PetType.Cat => CatPhotos,
+            PetType.Dog => DogPhotos,
+            PetType.Bird => BirdPhotos,
+            PetType.Rabbit => RabbitPhotos,
+            _ => CatPhotos
+        };
+    }
+
+    // Realistic stock photos (Unsplash) — stable URLs for demo data
+    private static readonly string[] CatPhotos =
+    {
+        "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1573865526739-10659fec78a5?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1495360010541-f48722b34f7d?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1543852786-1cf6624b9987?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1533743983669-94fa5c4338ec?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1526336024174-e58f5cdd8e13?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1511044568932-338cba0ad803?auto=format&fit=crop&w=800&q=80"
+    };
+
+    private static readonly string[] DogPhotos =
+    {
+        "https://images.unsplash.com/photo-1543466835-192a7c4e51f7?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1530281700549-e82e7bf010d6?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1587300003388-59208cc962cb?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1596492784531-6e6eb5ea9993?auto=format&fit=crop&w=800&q=80"
+    };
+
+    private static readonly string[] BirdPhotos =
+    {
+        "https://images.unsplash.com/photo-1520808663317-647b476a81b9?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1444464666168-49d933b2eddb?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1549608276-5786777e6587?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1452570053594-1b985d6ea890?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1601262846983-db61a7a24558?auto=format&fit=crop&w=800&q=80"
+    };
+
+    private static readonly string[] RabbitPhotos =
+    {
+        "https://images.unsplash.com/photo-1585110396000-c5ffd4a28924?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1589933768059-bd8b4f26fbc5?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1589146194411-f2ba87fe3fca?auto=format&fit=crop&w=800&q=80"
+    };
+
+    private static readonly string[] HamsterPhotos =
+    {
+        "https://images.unsplash.com/photo-1425082661705-1834bfd09dca?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=800&q=80"
+    };
+
+    private static readonly string[] TurtlePhotos =
+    {
+        "https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1549366021-9f761d45033f?auto=format&fit=crop&w=800&q=80"
+    };
 }

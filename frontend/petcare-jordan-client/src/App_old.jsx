@@ -1,5 +1,4 @@
-import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 
 const baseTabs = [
@@ -31,7 +30,104 @@ const emptyFoundForm = {
   petType: "Cat", description: "", foundPlace: "", foundDateUtc: "", photoUrl: "", contactName: "", contactPhone: ""
 };
 
-import { translations, interpolate, formatDate, formatDateTime } from "./i18n";
+const translations = {
+  en: {
+    tabs: { home: "Home", adoption: "Adoption", community: "Community", health: "Health", registry: "Registry", appointments: "Appointments", vetCases: "My Cases", admin: "Admin" },
+    common: {
+      account: "Account",
+      signIn: "Sign in",
+      register: "Register",
+      createAccount: "Create account",
+      signOut: "Sign out",
+      quickSignIn: "Quick sign-in",
+      workflow: "Workflow",
+      notifications: "Notifications",
+      selectPet: "Select pet",
+      selectVet: "Select vet",
+      sendMessage: "Send message",
+      updateAppointment: "Update appointment",
+      addMedicalRecord: "Add medical record",
+      addVaccination: "Add vaccination",
+      savePet: "Save pet",
+      postLost: "Post lost report",
+      postFound: "Post found report",
+      user: "User",
+      vet: "Vet",
+      admin: "Admin",
+      owner: "Owner",
+      guest: "Guest",
+      language: "Language"
+    },
+    landing: {
+      title: "Start from login, then move into the dashboard that matches your role.",
+      subtitle: "The system now keeps the rest of the app behind authentication, so users enter through one clear page first."
+    },
+    shell: {
+      appName: "PetCare Jordan",
+      mainTitle: "Pet records, appointments, and follow-up in one place.",
+      mainSubtitle: "Owners request care, vets follow cases, and admins monitor the workflow.",
+      heroTitle: "Appointments, case follow-up, and role-based work are now part of the system.",
+      heroSubtitle: "This screen now focuses on what each role should actually do inside the project."
+    },
+    auth: {
+      signInPrompt: "Sign in to continue",
+      samplePrompt: "Use a sample account or create a new owner/vet profile.",
+      email: "Email",
+      password: "Password",
+      fullName: "Full name",
+      phone: "Phone number",
+      city: "City"
+    }
+  },
+  ar: {
+    tabs: { home: "╪º┘ä╪▒╪ª┘è╪│┘è╪⌐", adoption: "╪º┘ä╪¬╪¿┘å┘æ┘è", community: "╪º┘ä┘à╪¼╪¬┘à╪╣", health: "╪º┘ä╪╡╪¡╪⌐", registry: "╪º┘ä╪│╪¼┘ä", appointments: "╪º┘ä┘à┘ê╪º╪╣┘è╪»", vetCases: "╪¡╪º┘ä╪¬┘è", admin: "╪º┘ä╪Ñ╪»╪º╪▒╪⌐" },
+    common: {
+      account: "╪º┘ä╪¡╪│╪º╪¿",
+      signIn: "╪¬╪│╪¼┘è┘ä ╪º┘ä╪»╪«┘ê┘ä",
+      register: "╪Ñ┘å╪┤╪º╪í ╪¡╪│╪º╪¿",
+      createAccount: "╪Ñ┘å╪┤╪º╪í ╪º┘ä╪¡╪│╪º╪¿",
+      signOut: "╪¬╪│╪¼┘è┘ä ╪º┘ä╪«╪▒┘ê╪¼",
+      quickSignIn: "╪»╪«┘ê┘ä ╪│╪▒┘è╪╣",
+      workflow: "╪│┘è╪▒ ╪º┘ä╪╣┘à┘ä",
+      notifications: "╪º┘ä╪Ñ╪┤╪╣╪º╪▒╪º╪¬",
+      selectPet: "╪º╪«╪¬╪▒ ╪º┘ä╪¡┘è┘ê╪º┘å",
+      selectVet: "╪º╪«╪¬╪▒ ╪º┘ä╪╖╪¿┘è╪¿",
+      sendMessage: "╪Ñ╪▒╪│╪º┘ä ╪º┘ä╪▒╪│╪º┘ä╪⌐",
+      updateAppointment: "╪¬╪¡╪»┘è╪½ ╪º┘ä┘à┘ê╪╣╪»",
+      addMedicalRecord: "╪Ñ╪╢╪º┘ü╪⌐ ╪│╪¼┘ä ╪╖╪¿┘è",
+      addVaccination: "╪Ñ╪╢╪º┘ü╪⌐ ┘à╪╖╪╣┘ê┘à",
+      savePet: "╪¡┘ü╪╕ ╪º┘ä╪¡┘è┘ê╪º┘å",
+      postLost: "┘å╪┤╪▒ ╪¿┘ä╪º╪║ ┘à┘ü┘é┘ê╪»",
+      postFound: "┘å╪┤╪▒ ╪¿┘ä╪º╪║ ┘à┘ê╪¼┘ê╪»",
+      user: "┘à╪│╪¬╪«╪»┘à",
+      vet: "╪╖╪¿┘è╪¿",
+      admin: "╪ú╪»┘à┘å",
+      owner: "┘à╪º┘ä┘â",
+      guest: "╪▓╪º╪ª╪▒",
+      language: "╪º┘ä┘ä╪║╪⌐"
+    },
+    landing: {
+      title: "╪º╪¿╪»╪ª┘è ┘à┘å ╪╡┘ü╪¡╪⌐ ╪º┘ä╪»╪«┘ê┘ä ╪½┘à ╪º┘å╪¬┘é┘ä┘è ╪Ñ┘ä┘ë ┘ä┘ê╪¡╪⌐ ╪º┘ä╪¬╪¡┘â┘à ╪º┘ä┘à┘å╪º╪│╪¿╪⌐ ┘ä╪»┘ê╪▒┘â.",
+      subtitle: "╪º┘ä┘å╪╕╪º┘à ╪º┘ä╪ó┘å ┘è╪«┘ü┘è ╪¿╪º┘é┘è ╪º┘ä╪╡┘ü╪¡╪º╪¬ ╪¡╪¬┘ë ┘è╪¬┘à ╪¬╪│╪¼┘è┘ä ╪º┘ä╪»╪«┘ê┘ä╪î ┘ä┘è┘â┘ê┘å ╪º┘ä╪º╪│╪¬╪«╪»╪º┘à ╪ú┘ê╪╢╪¡ ┘ê╪ú╪│┘ç┘ä."
+    },
+    shell: {
+      appName: "╪¿┘è╪¬ ┘â┘è╪▒ ╪º┘ä╪ú╪▒╪»┘å",
+      mainTitle: "╪│╪¼┘ä╪º╪¬ ╪º┘ä╪¡┘è┘ê╪º┘å╪º╪¬╪î ╪º┘ä┘à┘ê╪º╪╣┘è╪»╪î ┘ê╪º┘ä┘à╪¬╪º╪¿╪╣╪⌐ ┘ü┘è ┘à┘â╪º┘å ┘ê╪º╪¡╪».",
+      mainSubtitle: "╪º┘ä┘à╪º┘ä┘â ┘è╪╖┘ä╪¿ ╪º┘ä╪«╪»┘à╪⌐╪î ╪º┘ä╪╖╪¿┘è╪¿ ┘è╪¬╪º╪¿╪╣ ╪º┘ä╪¡╪º┘ä╪⌐╪î ┘ê╪º┘ä╪ú╪»┘à┘å ┘è╪▒╪º┘é╪¿ ╪│┘è╪▒ ╪º┘ä╪╣┘à┘ä.",
+      heroTitle: "╪º┘ä┘à┘ê╪º╪╣┘è╪»╪î ┘à╪¬╪º╪¿╪╣╪⌐ ╪º┘ä╪¡╪º┘ä╪º╪¬╪î ┘ê╪º┘ä╪╣┘à┘ä ╪¡╪│╪¿ ╪º┘ä╪»┘ê╪▒ ╪╡╪º╪▒┘ê╪º ╪¼╪▓╪í┘ï╪º ╪ú╪│╪º╪│┘è┘ï╪º ┘à┘å ╪º┘ä┘å╪╕╪º┘à.",
+      heroSubtitle: "╪º┘ä┘ê╪º╪¼┘ç╪⌐ ╪º┘ä╪ó┘å ╪¬╪▒┘â┘æ╪▓ ╪╣┘ä┘ë ┘à╪º ┘è╪¡╪¬╪º╪¼┘ç ┘â┘ä ┘à╪│╪¬╪«╪»┘à ┘ü╪╣┘ä┘è┘ï╪º ╪»╪º╪«┘ä ╪º┘ä┘à╪┤╪▒┘ê╪╣."
+    },
+    auth: {
+      signInPrompt: "╪│╪¼┘ä┘è ╪º┘ä╪»╪«┘ê┘ä ┘ä┘ä┘à╪¬╪º╪¿╪╣╪⌐",
+      samplePrompt: "╪º╪│╪¬╪«╪»┘à┘è ╪¡╪│╪º╪¿┘ï╪º ╪¬╪¼╪▒┘è╪¿┘è┘ï╪º ╪ú┘ê ╪ú┘å╪┤╪ª┘è ╪¡╪│╪º╪¿ ┘à╪º┘ä┘â ╪ú┘ê ╪╖╪¿┘è╪¿.",
+      email: "╪º┘ä╪¿╪▒┘è╪» ╪º┘ä╪Ñ┘ä┘â╪¬╪▒┘ê┘å┘è",
+      password: "┘â┘ä┘à╪⌐ ╪º┘ä┘à╪▒┘ê╪▒",
+      fullName: "╪º┘ä╪º╪│┘à ╪º┘ä┘â╪º┘à┘ä",
+      phone: "╪▒┘é┘à ╪º┘ä┘ç╪º╪¬┘ü",
+      city: "╪º┘ä┘à╪»┘è┘å╪⌐"
+    }
+  }
+};
 
 function getTabs(currentUser, t) {
   if (!currentUser) return baseTabs;
@@ -54,9 +150,13 @@ function getDefaultTab(currentUser) {
   return "home";
 }
 
+function formatDate(value) {
+  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
-
-
+function formatDateTime(value) {
+  return new Date(value).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 function SectionCard({ title, subtitle, actions, children }) {
   return (
@@ -132,7 +232,7 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
         <strong>{details.appointment.petName}</strong>
         <p>{details.appointment.reason}</p>
         <div className="meta-line"><span>{details.appointment.ownerName}</span><span>{details.appointment.vetName}</span></div>
-        <div className="meta-line"><span>{details.appointment.status}</span><span>{formatDateTime(details.appointment.preferredDateUtc, language)}</span></div>
+        <div className="meta-line"><span>{details.appointment.status}</span><span>{formatDateTime(details.appointment.preferredDateUtc)}</span></div>
         {details.appointment.ownerNotes ? <p>Owner note: {details.appointment.ownerNotes}</p> : null}
         {details.appointment.vetNotes ? <p>Vet note: {details.appointment.vetNotes}</p> : null}
       </article>
@@ -141,7 +241,7 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
           <article key={item.id} className="list-card">
             <strong>{item.senderName}</strong>
             <p>{item.message}</p>
-            <div className="meta-line"><span>{item.senderRole}</span><span>{formatDateTime(item.sentAtUtc, language)}</span></div>
+            <div className="meta-line"><span>{item.senderRole}</span><span>{formatDateTime(item.sentAtUtc)}</span></div>
           </article>
         ))}
       </div>
@@ -158,8 +258,6 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem("petcareLanguage") || "en");
   const [activeTab, setActiveTab] = useState(() => getDefaultTab(JSON.parse(localStorage.getItem("petcareCurrentUser") || "null")));
-  const location = useLocation();
-  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(null);
   const [pets, setPets] = useState([]);
   const [adoptions, setAdoptions] = useState([]);
@@ -553,9 +651,9 @@ function App() {
 
         <nav className="tab-list">
           {tabs.map((tab) => (
-            <Link key={tab.id} to={"/" + tab.id} className={location.pathname === "/" + tab.id || (location.pathname === "/" && tab.id === "home") ? "tab active" : "tab"} onClick={() => setActiveTab(tab.id)}>
+            <button key={tab.id} type="button" className={activeTab === tab.id ? "tab active" : "tab"} onClick={() => setActiveTab(tab.id)}>
               {tab.label}
-            </Link>
+            </button>
           ))}
         </nav>
 
@@ -585,7 +683,7 @@ function App() {
               <div className="hero-notes">
                 <div><strong>{dashboard.totalPets}</strong><span>registered pets</span></div>
                 <div><strong>{notifications.length}</strong><span>notifications for this account</span></div>
-                <div><strong>{currentUser?.role ?? text.common.guest}</strong><span>{language === "ar" ? "الواجهة الحالية" : "current view"}</span></div>
+                <div><strong>{currentUser?.role ?? text.common.guest}</strong><span>{language === "ar" ? "╪º┘ä┘ê╪º╪¼┘ç╪⌐ ╪º┘ä╪¡╪º┘ä┘è╪⌐" : "current view"}</span></div>
               </div>
             ) : null}
           </div>
@@ -611,20 +709,20 @@ function App() {
         {loading ? <div className="section-card">Loading project data...</div> : null}
 
         {!loading && dashboard ? (
-          <Routes>
-            <Route path="/home" element={<>
+          <>
+            {activeTab === "home" ? (
               <div className="content-grid">
-                <SectionCard title={text.home.overviewTitle}>
+                <SectionCard title="Project overview" subtitle="Current data across the system.">
                   <div className="stats-grid">
-                    <article className="stat-card"><strong>{dashboard.totalUsers}</strong><span>owners and admins</span></article>
-                    <article className="stat-card"><strong>{dashboard.totalVets}</strong><span>veterinarians</span></article>
-                    <article className="stat-card"><strong>{dashboard.upcomingVaccines}</strong><span>upcoming vaccines</span></article>
-                    <article className="stat-card"><strong>{dashboard.petsForAdoption}</strong><span>adoption cases</span></article>
+                    <article className="stat-card"><strong>{dashboard.totalUsers}</strong><span>owners and admins</span><p>Accounts in the system.</p></article>
+                    <article className="stat-card"><strong>{dashboard.totalVets}</strong><span>veterinarians</span><p>Doctors available for follow-up.</p></article>
+                    <article className="stat-card"><strong>{dashboard.upcomingVaccines}</strong><span>upcoming vaccines</span><p>Due within the next 30 days.</p></article>
+                    <article className="stat-card"><strong>{dashboard.petsForAdoption}</strong><span>adoption cases</span><p>Pets currently listed.</p></article>
                   </div>
                 </SectionCard>
 
                 <div className="split-grid">
-                  <SectionCard title={text.home.adoptionsTitle}>
+                  <SectionCard title="Latest adoption cases" subtitle="Recent published adoption requests.">
                     <div className="mini-card-list">
                       {featuredAdoptions.map((item) => (
                         <article key={item.id} className="mini-card">
@@ -639,14 +737,14 @@ function App() {
                     </div>
                   </SectionCard>
 
-                  <SectionCard title={text.home.notifyTitle}>
+                  <SectionCard title="Notifications" subtitle="Messages and reminders for the signed-in account.">
                     {notifications.length > 0 ? (
                       <div className="list-stack">
                         {notifications.map((item) => (
                           <article key={item.id} className="list-card">
                             <strong>{item.title}</strong>
                             <p>{item.message}</p>
-                            <span>{formatDate(item.triggerDateUtc, language)}</span>
+                            <span>{formatDate(item.triggerDateUtc)}</span>
                           </article>
                         ))}
                       </div>
@@ -655,12 +753,12 @@ function App() {
                 </div>
 
                 <div className="split-grid">
-                  <SectionCard title={text.home.cityTitle}>
+                  <SectionCard title="Coverage by city" subtitle="Pet distribution across cities.">
                     <div className="city-grid">
                       {cityCoverage.map(([city, value]) => <article key={city} className="city-card"><strong>{city}</strong><span>{value} pets</span></article>)}
                     </div>
                   </SectionCard>
-                  <SectionCard title={text.home.typesTitle}>
+                  <SectionCard title="Pet types" subtitle="Current registry mix.">
                     <div className="bar-list">
                       {typeCoverage.map(([label, value]) => (
                         <div key={label} className="bar-row">
@@ -673,10 +771,11 @@ function App() {
                   </SectionCard>
                 </div>
               </div>
-            </>} />
-            <Route path="/appointments" element={currentUser?.role === "User" ? <>
+            ) : null}
+
+            {activeTab === "appointments" && currentUser?.role === "User" ? (
               <div className="split-grid">
-                <SectionCard title={text.appointments.requestTitle}>
+                <SectionCard title="Request a vet appointment" subtitle="Owners can book and follow up on their pets.">
                   <form className="auth-form" onSubmit={handleCreateAppointment}>
                     <select value={appointmentForm.petId} onChange={(event) => setAppointmentForm((current) => ({ ...current, petId: event.target.value }))}>
                       <option value="">Select pet</option>
@@ -693,40 +792,41 @@ function App() {
                   </form>
                 </SectionCard>
 
-                <SectionCard title={text.appointments.mineTitle}>
+                <SectionCard title="My appointments" subtitle="Track status updates and open the chat.">
                   <div className="list-stack">
                     {ownerAppointments.map((item) => (
                       <article key={item.id} className="list-card" onClick={() => setSelectedAppointmentId(item.id)} style={{ cursor: "pointer" }}>
                         <strong>{item.petName}</strong>
                         <p>{item.reason}</p>
                         <div className="meta-line"><span>{item.vetName}</span><span>{item.status}</span></div>
-                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{item.messageCount} messages</span></div>
+                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc)}</span><span>{item.messageCount} messages</span></div>
                       </article>
                     ))}
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Case chat">
+                <SectionCard title="Case chat" subtitle="Owner and vet can communicate inside the appointment.">
                   <AppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={setMessageDraft} onSendMessage={handleSendMessage} />
                 </SectionCard>
               </div>
-            </> : null} />
-            <Route path="/appointments" element={currentUser?.role === "Vet" ? <>
+            ) : null}
+
+            {activeTab === "appointments" && currentUser?.role === "Vet" ? (
               <div className="split-grid">
-                <SectionCard title="Assigned cases">
+                <SectionCard title="Assigned cases" subtitle="Requests waiting for review or follow-up.">
                   <div className="list-stack">
                     {vetAppointments.map((item) => (
                       <article key={item.id} className="list-card" onClick={() => setSelectedAppointmentId(item.id)} style={{ cursor: "pointer" }}>
                         <strong>{item.petName}</strong>
                         <p>{item.reason}</p>
                         <div className="meta-line"><span>{item.ownerName}</span><span>{item.status}</span></div>
-                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc, language)}</span><span>{item.messageCount} messages</span></div>
+                        <div className="meta-line"><span>{formatDateTime(item.preferredDateUtc)}</span><span>{item.messageCount} messages</span></div>
                       </article>
                     ))}
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Update case status">
+                <SectionCard title="Update case status" subtitle="Confirm, continue, complete, or cancel the appointment.">
                   {appointmentDetails ? (
                     <form className="auth-form" onSubmit={handleUpdateAppointmentStatus}>
                       <select value={vetStatusForm.status} onChange={(event) => setVetStatusForm((current) => ({ ...current, status: event.target.value }))}>
@@ -742,18 +842,18 @@ function App() {
                   ) : <p className="empty-state">Select a case first.</p>}
                 </SectionCard>
 
-                <SectionCard title="Case chat">
+                <SectionCard title="Case chat" subtitle="Conversation between the owner and the vet.">
                   <AppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={setMessageDraft} onSendMessage={handleSendMessage} />
                 </SectionCard>
 
-                <SectionCard title={text.appointments.medicalHistoryTitle}>
+                <SectionCard title="Medical history" subtitle="Records linked to the pet in this case.">
                   {petDetails ? (
                     <div className="list-stack">
                       {petDetails.medicalHistory.map((item) => (
                         <article key={item.id} className="list-card">
                           <strong>{item.visitReason}</strong>
                           <p>{item.diagnosis}</p>
-                          <div className="meta-line"><span>{item.vetName}</span><span>{formatDate(item.visitDateUtc, language)}</span></div>
+                          <div className="meta-line"><span>{item.vetName}</span><span>{formatDate(item.visitDateUtc)}</span></div>
                           <span>{item.treatment}</span>
                         </article>
                       ))}
@@ -762,7 +862,7 @@ function App() {
                   ) : <p className="empty-state">Select a case first.</p>}
                 </SectionCard>
 
-                <SectionCard title={text.appointments.addMedicalTitle}>
+                <SectionCard title="Add medical record" subtitle="Create a visit note directly from the case.">
                   {petDetails ? (
                     <form className="auth-form" onSubmit={handleCreateMedicalRecord}>
                       <input type="text" placeholder="Visit reason" value={medicalForm.visitReason} onChange={(event) => setMedicalForm((current) => ({ ...current, visitReason: event.target.value }))} />
@@ -774,14 +874,14 @@ function App() {
                   ) : <p className="empty-state">Select a case first.</p>}
                 </SectionCard>
 
-                <SectionCard title={text.appointments.vaccinesTitle}>
+                <SectionCard title="Vaccinations" subtitle="Track due dates and completed shots.">
                   {petDetails ? (
                     <div className="list-stack">
                       {petDetails.vaccines.map((item) => (
                         <article key={item.id} className="list-card">
                           <strong>{item.vaccineName}</strong>
                           <p>{item.isCompleted ? "Completed" : "Pending"}</p>
-                          <div className="meta-line"><span>{item.vetName}</span><span>Due {formatDate(item.dueDateUtc, language)}</span></div>
+                          <div className="meta-line"><span>{item.vetName}</span><span>Due {formatDate(item.dueDateUtc)}</span></div>
                         </article>
                       ))}
                       {petDetails.vaccines.length === 0 ? <p className="empty-state">No vaccines recorded yet for this pet.</p> : null}
@@ -789,7 +889,7 @@ function App() {
                   ) : <p className="empty-state">Select a case first.</p>}
                 </SectionCard>
 
-                <SectionCard title={text.appointments.addVaccineTitle}>
+                <SectionCard title="Add vaccination" subtitle="Create a vaccine entry for the selected pet.">
                   {petDetails ? (
                     <form className="auth-form" onSubmit={handleCreateVaccination}>
                       <input type="text" placeholder="Vaccine name" value={vaccineForm.vaccineName} onChange={(event) => setVaccineForm((current) => ({ ...current, vaccineName: event.target.value }))} />
@@ -804,33 +904,34 @@ function App() {
                   ) : <p className="empty-state">Select a case first.</p>}
                 </SectionCard>
               </div>
-            </> : null} />
-            <Route path="/admin" element={currentUser?.role === "Admin" ? <>
+            ) : null}
+
+            {activeTab === "admin" && currentUser?.role === "Admin" ? (
               <div className="content-grid">
-                <SectionCard title={text.admin.summaryTitle}>
+                <SectionCard title="Admin workflow summary" subtitle="What the admin should watch in the care pipeline.">
                   <div className="stats-grid">
-                    <article className="stat-card"><strong>{adminSummary?.totalAppointments ?? 0}</strong><span>total appointments</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.pendingAppointments ?? 0}</strong><span>pending requests</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.activeVetCases ?? 0}</strong><span>active cases</span></article>
-                    <article className="stat-card"><strong>{adminSummary?.totalMessages ?? 0}</strong><span>chat messages</span></article>
+                    <article className="stat-card"><strong>{adminSummary?.totalAppointments ?? 0}</strong><span>total appointments</span><p>All created requests.</p></article>
+                    <article className="stat-card"><strong>{adminSummary?.pendingAppointments ?? 0}</strong><span>pending requests</span><p>Still waiting for vet action.</p></article>
+                    <article className="stat-card"><strong>{adminSummary?.activeVetCases ?? 0}</strong><span>active cases</span><p>Confirmed or in progress.</p></article>
+                    <article className="stat-card"><strong>{adminSummary?.totalMessages ?? 0}</strong><span>chat messages</span><p>Communication volume across cases.</p></article>
                   </div>
                 </SectionCard>
 
-                <SectionCard title={text.admin.recentTitle}>
+                <SectionCard title="Recent appointments" subtitle="Latest owner-vet cases inside the system.">
                   <div className="list-stack">
                     {(adminSummary?.recentAppointments ?? []).map((item) => (
                       <article key={item.id} className="list-card">
                         <strong>{item.petName}</strong>
                         <p>{item.reason}</p>
                         <div className="meta-line"><span>{item.ownerName}</span><span>{item.vetName}</span></div>
-                        <div className="meta-line"><span>{item.status}</span><span>{formatDateTime(item.preferredDateUtc, language)}</span></div>
+                        <div className="meta-line"><span>{item.status}</span><span>{formatDateTime(item.preferredDateUtc)}</span></div>
                       </article>
                     ))}
                   </div>
                 </SectionCard>
 
                 <div className="split-grid">
-                  <SectionCard title={text.admin.usersTitle}>
+                  <SectionCard title="Users and roles" subtitle="Manage owners, vets, and admin access.">
                     <div className="list-stack">
                       {adminUsers.map((item) => (
                         <article key={item.id} className="list-card">
@@ -848,13 +949,13 @@ function App() {
                     </div>
                   </SectionCard>
 
-                  <SectionCard title={text.admin.reportsTitle}>
+                  <SectionCard title="Community reports" subtitle="Resolve lost and found reports from one place.">
                     <div className="list-stack">
                       {adminReports.map((item) => (
                         <article key={`${item.reportKind}-${item.id}`} className="list-card">
                           <strong>{item.reportKind} | {item.title}</strong>
                           <p>{item.description}</p>
-                          <div className="meta-line"><span>{item.place}</span><span>{formatDate(item.reportDateUtc, language)}</span></div>
+                          <div className="meta-line"><span>{item.place}</span><span>{formatDate(item.reportDateUtc)}</span></div>
                           <div className="meta-line"><span>{item.contactName}</span><span>{item.contactPhone}</span></div>
                           <select value={item.status} onChange={(event) => handleAdminReportStatus(item.reportKind, item.id, event.target.value)}>
                             <option value="Active">Active</option>
@@ -866,11 +967,12 @@ function App() {
                   </SectionCard>
                 </div>
               </div>
-            </> : null} />
-            <Route path="/adoption" element={<>
+            ) : null}
+
+            {activeTab === "adoption" ? (
               <div className="split-grid">
                 {currentUser?.role === "User" ? (
-                  <SectionCard title={text.adoption.addTitle}>
+                  <SectionCard title="Add a pet" subtitle="Register a pet and optionally publish it for adoption.">
                     <form className="auth-form" onSubmit={handleCreatePet}>
                       <input type="text" placeholder="Pet name" value={petForm.name} onChange={(event) => setPetForm((current) => ({ ...current, name: event.target.value }))} />
                       <div className="split-grid">
@@ -923,7 +1025,7 @@ function App() {
                   </SectionCard>
                 ) : null}
 
-                <SectionCard title={text.adoption.listingsTitle}>
+                <SectionCard title="Adoption listings" subtitle="Published pets available for adoption.">
                   <div className="pet-grid">
                     {adoptions.map((item) => (
                       <article key={item.id} className="pet-card">
@@ -944,11 +1046,12 @@ function App() {
                   </div>
                 </SectionCard>
               </div>
-            </>} />
-            <Route path="/community" element={<>
+            ) : null}
+
+            {activeTab === "community" ? (
               <div className="split-grid">
                 {currentUser?.role === "User" ? (
-                  <SectionCard title={text.community.createTitle}>
+                  <SectionCard title="Create community report" subtitle="Post lost or found cases from your account.">
                     <div className="list-stack">
                       <form className="auth-form" onSubmit={handleCreateLostReport}>
                         <strong>Lost pet report</strong>
@@ -998,7 +1101,7 @@ function App() {
                   </SectionCard>
                 ) : null}
 
-                <SectionCard title={text.community.lostTitle}>
+                <SectionCard title="Lost pets" subtitle="Owner notices and community follow-up.">
                   <div className="list-stack">
                     {lostPets.map((item) => (
                       <article key={item.id} className="community-card">
@@ -1006,7 +1109,7 @@ function App() {
                         <div>
                           <strong>{item.petName}</strong>
                           <p>{item.description}</p>
-                          <div className="meta-line"><span>{item.lastSeenPlace}</span><span>{formatDate(item.lastSeenDateUtc, language)}</span></div>
+                          <div className="meta-line"><span>{item.lastSeenPlace}</span><span>{formatDate(item.lastSeenDateUtc)}</span></div>
                           <div className="meta-line"><span>{item.rewardAmount ? `${item.rewardAmount} JOD reward` : "No reward listed"}</span><span>{item.contactPhone}</span></div>
                         </div>
                       </article>
@@ -1014,7 +1117,7 @@ function App() {
                   </div>
                 </SectionCard>
 
-                <SectionCard title={text.community.foundTitle}>
+                <SectionCard title="Found pets" subtitle="Cases waiting to be matched back to owners.">
                   <div className="list-stack">
                     {foundPets.map((item) => (
                       <article key={item.id} className="community-card">
@@ -1022,7 +1125,7 @@ function App() {
                         <div>
                           <strong>{item.petType}</strong>
                           <p>{item.description}</p>
-                          <div className="meta-line"><span>{item.foundPlace}</span><span>{formatDate(item.foundDateUtc, language)}</span></div>
+                          <div className="meta-line"><span>{item.foundPlace}</span><span>{formatDate(item.foundDateUtc)}</span></div>
                           <div className="meta-line"><span>{item.contactName}</span><span>{item.contactPhone}</span></div>
                         </div>
                       </article>
@@ -1030,23 +1133,25 @@ function App() {
                   </div>
                 </SectionCard>
               </div>
-            </>} />
-            <Route path="/health" element={<>
-              <SectionCard title={text.health.title}>
+            ) : null}
+
+            {activeTab === "health" ? (
+              <SectionCard title="Upcoming vaccines" subtitle="Medical follow-up due in the next 30 days.">
                 <div className="list-stack">
                   {vaccines.map((item) => (
                     <article key={item.id} className="list-card">
                       <strong>{item.petName}</strong>
                       <p>{item.vaccineName}</p>
                       <div className="meta-line"><span>{item.ownerName}</span><span>{item.ownerPhone}</span></div>
-                      <span>Due {formatDate(item.dueDateUtc, language)}</span>
+                      <span>Due {formatDate(item.dueDateUtc)}</span>
                     </article>
                   ))}
                 </div>
               </SectionCard>
-            </>} />
-            <Route path="/registry" element={<>
-              <SectionCard title={text.registry.title}>
+            ) : null}
+
+            {activeTab === "registry" ? (
+              <SectionCard title="Pet registry" subtitle="Search by pet name, breed, city, or collar ID.">
                 <div className="search-row">
                   <input type="search" placeholder="Try rabbit, Amman, or PCJ-1001" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
                 </div>
@@ -1069,9 +1174,8 @@ function App() {
                   ))}
                 </div>
               </SectionCard>
-            </>} />
-            <Route path="*" element={<HomeRedirect currentUser={currentUser} />} />
-          </Routes>
+            ) : null}
+          </>
         ) : null}
       </main>
     </div>
@@ -1079,5 +1183,3 @@ function App() {
 }
 
 export default App;
-
-function HomeRedirect({ currentUser }) { const navigate = useNavigate(); useEffect(() => { navigate("/" + getDefaultTab(currentUser), { replace: true }); }, [currentUser, navigate]); return null; }

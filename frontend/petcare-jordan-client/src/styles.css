@@ -1,5 +1,5 @@
 :root {
-  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  font-family: "Cairo", "Outfit", "Segoe UI", "Trebuchet MS", sans-serif;
   color: #1f2933;
   background:
     radial-gradient(circle at top left, rgba(205, 167, 123, 0.18), transparent 28%),
@@ -156,7 +156,7 @@ img {
   gap: 24px;
 }
 
-.main-content > * {
+.main-content>* {
   width: min(100%, 1420px);
   margin-inline: auto;
 }
@@ -180,7 +180,7 @@ img {
   margin-top: 8px;
 }
 
-.hero-copy > p {
+.hero-copy>p {
   max-width: 56ch;
   color: var(--muted);
   margin: 14px 0 0;
@@ -582,6 +582,7 @@ img {
 }
 
 @media (max-width: 1180px) {
+
   .app-shell,
   .hero,
   .split-grid {
@@ -599,6 +600,7 @@ img {
 }
 
 @media (max-width: 720px) {
+
   .main-content,
   .sidebar {
     padding: 20px;
