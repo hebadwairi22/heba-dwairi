@@ -1,3 +1,6 @@
+import fs from "fs";
+
+const fullContent = `
 import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api";
@@ -12,9 +15,9 @@ const baseTabs = [
 ];
 
 const demoCredentials = [
-  { role: "admin", email: "yaqeen@petcare.jo", pass: "Pass123!", name: "يقين | Yaqeen" },
-  { role: "vet", email: "safaa.vet@petcare.jo", pass: "Pass123!", name: "د. صفاء | Dr. Safaa" },
-  { role: "owner", email: "karam@petcare.jo", pass: "Pass123!", name: "كرم | Karam" }
+  { role: "Admin", email: "loai.admin@petcare.jo", password: "Pass123!", name: "لؤي | Loai" },
+  { role: "Vet", email: "safaa.vet@petcare.jo", password: "Pass123!", name: "د. صفاء | Dr. Safaa" },
+  { role: "Owner", email: "yaqeen@petcare.jo", password: "Pass123!", name: "يقين | Yaqeen" }
 ];
 
 const emptyRegisterForm = { fullName: "", email: "", password: "", phoneNumber: "", city: "", role: "User" };
@@ -190,7 +193,7 @@ function App() {
   const [ownerMessages, setOwnerMessages] = useState([]);
   const [ownerMsgDraft, setOwnerMsgDraft] = useState("");
   const [authMode, setAuthMode] = useState("login");
-  const [loginForm, setLoginForm] = useState({ email: demoCredentials[0].email, password: demoCredentials[0].pass });
+  const [loginForm, setLoginForm] = useState({ email: demoCredentials[0].email, password: demoCredentials[0].password });
   const [registerForm, setRegisterForm] = useState(emptyRegisterForm);
   const text = translations[language];
   const tabs = useMemo(() => getTabs(currentUser, text), [currentUser, text]);
@@ -213,8 +216,7 @@ function App() {
       }
       try {
         setLoading(true);
-        // Use allSettled to prevent one failing endpoint from crashing the entire app
-        const results = await Promise.allSettled([
+        const [dashboardData, petsData, adoptionData, lostData, foundData, vaccineData, vetUsers] = await Promise.all([
           api.getDashboard(),
           api.getPets(),
           api.getAdoptions(),
@@ -223,18 +225,13 @@ function App() {
           api.getUpcomingVaccines(),
           api.getVets()
         ]);
-
-        const [dashboardData, petsData, adoptionData, lostData, foundData, vaccineData, vetUsers] = results.map(res => 
-          res.status === "fulfilled" ? res.value : null
-        );
-
         setDashboard(dashboardData);
-        setPets(petsData || []);
-        setAdoptions(adoptionData || []);
-        setLostPets(lostData || []);
-        setFoundPets(foundData || []);
-        setVaccines(vaccineData || []);
-        setVets(vetUsers || []);
+        setPets(petsData);
+        setAdoptions(adoptionData);
+        setLostPets(lostData);
+        setFoundPets(foundData);
+        setVaccines(vaccineData);
+        setVets(vetUsers);
       } catch {
         setError("Could not load the API.");
       } finally {
@@ -294,38 +291,23 @@ function App() {
 
   const filteredPets = useMemo(() => {
     return pets.filter((pet) => {
-      const name = pet.name || pet.Name || "";
-      const breed = pet.breed || pet.Breed || "";
-      const city = pet.city || pet.City || "";
-      const collarId = pet.collarId || pet.CollarId || "";
-      const target = `${name} ${breed} ${city} ${collarId}`.toLowerCase();
+      const target = \`\${pet.name} \${pet.breed} \${pet.city} \${pet.collarId}\`.toLowerCase();
       return target.includes(searchTerm.toLowerCase());
     });
   }, [pets, searchTerm]);
 
-  const ownPets = useMemo(() => {
-    return pets.filter((pet) => {
-      const ownerId = pet.ownerId || pet.OwnerId;
-      return ownerId?.toString() === currentUser?.id?.toString();
-    });
-  }, [pets, currentUser]);
+  const ownPets = useMemo(() => pets.filter((pet) => pet.ownerId === currentUser?.id), [pets, currentUser]);
   const featuredAdoptions = adoptions.slice(0, 3);
-  const cityCoverage = dashboard ? Object.entries(dashboard.petsByCity || dashboard.PetsByCity || {}) : [];
-  const typeCoverage = dashboard ? Object.entries(dashboard.petsByType || dashboard.PetsByType || {}) : [];
+  const cityCoverage = dashboard ? Object.entries(dashboard.petsByCity) : [];
+  const typeCoverage = dashboard ? Object.entries(dashboard.petsByType) : [];
 
   async function handleLogin(event) {
     event.preventDefault();
     try {
       const user = await api.login(loginForm.email, loginForm.password);
       setCurrentUser(user);
-      localStorage.setItem("petcareCurrentUser", JSON.stringify(user));
-      setAuthMode("login");
       setActiveTab(getDefaultTab(user));
-      navigate("/" + getDefaultTab(user));
-      setError(""); // مسح الأخطاء السابقة
-    } catch (e) { 
-      setError(e.message); 
-    }
+    } catch (e) { setError(e.message); }
   }
 
   async function handleRegister(event) {
@@ -341,7 +323,6 @@ function App() {
 
   async function handleCreateAppointment(event) {
     event.preventDefault();
-    if (!appointmentForm.petId || !appointmentForm.vetId || !appointmentForm.preferredDateUtc) return;
     try {
       const created = await api.createAppointment({ ...appointmentForm, ownerId: currentUser.id });
       setOwnerAppointments(prev => [created, ...prev]);
@@ -415,29 +396,6 @@ function App() {
     });
   }
 
-  async function handleQuickConsult(vetId) {
-    if (!currentUser) { setAuthMode("login"); return; }
-    try {
-      const payload = {
-        petId: ownPets[0]?.id || "", // Default to first pet if available
-        vetId,
-        preferredDateUtc: new Date().toISOString(),
-        reason: "استشارة سريعة | Quick Consultation",
-        ownerNotes: "أريد استشارة الطبيب بخصوص حيواني الأليف | I want to consult the doctor about my pet.",
-        ownerId: currentUser.id
-      };
-      if (!payload.petId) {
-        setError(language === "ar" ? "يرجى تسجيل حيوان أليف أولاً لبدء استشارة" : "Please register a pet first to start a consultation");
-        return;
-      }
-      const created = await api.createAppointment(payload);
-      setOwnerAppointments(prev => [created, ...prev]);
-      setSelectedAppointmentId(created.id);
-      setActiveTab("appointments");
-      navigate("/appointments");
-    } catch (e) { setError(e.message); }
-  }
-
   if (!currentUser) {
     return (
       <div className="app-shell" style={{ gridTemplateColumns: "1fr" }}>
@@ -491,7 +449,7 @@ function App() {
             {demoCredentials.map((item) => (
               <button key={item.role} type="button" className="credential-chip" onClick={() => {
                 setAuthMode("login");
-                setLoginForm({ email: item.email, password: item.pass });
+                setLoginForm({ email: item.email, password: item.password });
               }}>
                 <strong>{getLocalizedText(item.name, language)}</strong>
                 <span>{item.email}</span>
@@ -534,11 +492,11 @@ function App() {
                 <div className="split-grid">
                   <SectionCard title={text.home.featuredTitle}>
                     <div className="pet-grid">
-                      {(featuredAdoptions || []).map((item) => (
+                      {featuredAdoptions.map((item) => (
                         <article key={item.id} className="pet-card">
-                          <img src={item.photoUrl} alt={getLocalizedText(item.petName || item.PetName, language)} />
+                          <img src={item.photoUrl} alt={getLocalizedText(item.petName, language)} />
                           <div className="pet-card-body">
-                            <h4>{getLocalizedText(item.petName || item.PetName, language)}</h4>
+                            <h4>{getLocalizedText(item.petName, language)}</h4>
                             <span>{item.city} | {item.contactDetails}</span>
                           </div>
                         </article>
@@ -572,7 +530,7 @@ function App() {
                       {typeCoverage.map(([label, value]) => (
                         <div key={label} className="bar-row">
                           <span>{text.petTypes[label] || label}</span>
-                          <div className="bar-track"><div className="bar-fill" style={{ width: `${(value / (dashboard?.totalPets || 1)) * 100}%` }} /></div>
+                          <div className="bar-track"><div className="bar-fill" style={{ width: \`\${(value / (dashboard?.totalPets || 1)) * 100}%\` }} /></div>
                           <strong>{value}</strong>
                         </div>
                       ))}
@@ -677,7 +635,7 @@ function App() {
                         <option value="Other">{text.petTypes.Other}</option>
                       </select>
                       <input type="text" placeholder={text.adoption.breedPh} value={petForm.breed} onChange={e => setPetForm(c => ({ ...c, breed: e.target.value }))} />
-                      <textarea value={petForm.description} placeholder={text.adoption.descPh} onChange={e => setPetForm(c => ({ ...c, description: e.target.value }))} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
+                      <textarea value={petForm.description} placeholder={text.adoption.descPh} onChange={e => setPetForm(c => ({ ...c, description: e.target.value }))} />
                       <button type="submit">{text.common.savePet}</button>
                     </form>
                   </SectionCard>
@@ -705,29 +663,21 @@ function App() {
             <Route path="/community" element={<>
               <div className="split-grid">
                 <SectionCard title={text.community.lostTitle}>
-                   <div className="pet-grid">
+                   <div className="list-stack">
                      {lostPets.map(item => (
-                       <article key={item.id} className="pet-card">
-                         <img src={item.photoUrl} alt={getLocalizedText(item.petName, language)} />
-                         <div className="pet-card-body">
-                           <h4>{getLocalizedText(item.petName, language)}</h4>
-                           <p>{getLocalizedText(item.description, language)}</p>
-                           <div className="meta-line"><span>{item.lastSeenPlace}</span></div>
-                         </div>
+                       <article key={item.id} className="community-card">
+                         <strong>{getLocalizedText(item.petName, language)}</strong>
+                         <p>{getLocalizedText(item.description, language)}</p>
                        </article>
                      ))}
                    </div>
                 </SectionCard>
                 <SectionCard title={text.community.foundTitle}>
-                   <div className="pet-grid">
+                   <div className="list-stack">
                      {foundPets.map(item => (
-                       <article key={item.id} className="pet-card">
-                         <img src={item.photoUrl} alt={text.petTypes[item.petType]} />
-                         <div className="pet-card-body">
-                           <h4>{text.petTypes[item.petType] || item.petType}</h4>
-                           <p>{getLocalizedText(item.description, language)}</p>
-                           <div className="meta-line"><span>{item.foundPlace}</span></div>
-                         </div>
+                       <article key={item.id} className="community-card">
+                         <strong>{text.petTypes[item.petType] || item.petType}</strong>
+                         <p>{getLocalizedText(item.description, language)}</p>
                        </article>
                      ))}
                    </div>
@@ -736,38 +686,16 @@ function App() {
             </>} />
 
             <Route path="/health" element={<>
-              <div className="split-grid">
-                <SectionCard title={text.health.title}>
-                  <div className="list-stack">
-                    {(vaccines || []).map(item => (
-                      <article key={item.id} className="list-card">
-                        <strong>{getLocalizedText(item.petName || item.PetName, language)}</strong>
-                        <p>{getLocalizedText(item.vaccineName || item.VaccineName, language)}</p>
-                      </article>
-                    ))}
-                    {vaccines.length === 0 && <p className="empty-state">{text.common.noData}</p>}
-                  </div>
-                </SectionCard>
-
-                <SectionCard title={language === "ar" ? "خبرائنا البيطريين" : "Our Veterinary Specialists"}>
-                  <div className="pet-grid">
-                    {vets.map(vet => (
-                      <article key={vet.id} className="pet-card">
-                        <div className="avatar-circle" style={{ width: "100%", height: 180, borderRadius: 0, fontSize: "4rem" }}>
-                          {getLocalizedText(vet.fullName || vet.FullName || "User", language).charAt(0)}
-                        </div>
-                        <div className="pet-card-body">
-                          <h4>{getLocalizedText(vet.fullName || vet.FullName, language)}</h4>
-                          <span>{vet.city || vet.City}</span>
-                          <button className="btn-consult" onClick={() => handleQuickConsult(vet.id)}>
-                            {language === "ar" ? "استشارة فورية" : "Instant Consult"}
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </SectionCard>
-              </div>
+              <SectionCard title={text.health.title}>
+                <div className="list-stack">
+                  {vaccines.map(item => (
+                    <article key={item.id} className="list-card">
+                      <strong>{getLocalizedText(item.petName, language)}</strong>
+                      <p>{getLocalizedText(item.vaccineName, language)}</p>
+                    </article>
+                  ))}
+                </div>
+              </SectionCard>
             </>} />
 
             <Route path="/registry" element={<>
@@ -775,19 +703,13 @@ function App() {
                  <div className="search-row"><input type="search" placeholder={text.registry.searchPh} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
                  <div className="registry-grid">
                    {filteredPets.map(pet => (
-                      <article key={pet.id} className="registry-card">
-                        <img src={pet.photoUrl || pet.PhotoUrl} alt={getLocalizedText(pet.name || pet.Name, language)} />
-                        <div className="pet-card-body">
-                          <h4>{getLocalizedText(pet.name || pet.Name, language)}</h4>
-                          <span>{text.petTypes[pet.type || pet.Type]} | {getLocalizedText(pet.breed || pet.Breed, language)}</span>
-                          <div className="meta-line"><span>{pet.city || pet.City}</span><span>{pet.collarId || pet.CollarId}</span></div>
-                          {pet.role === "Vet" && (
-                            <button className="btn-consult" onClick={() => handleQuickConsult(pet.id)}>
-                              {language === "ar" ? "استشارة سريعة" : "Quick Consult"}
-                            </button>
-                          )}
-                        </div>
-                      </article>
+                     <article key={pet.id} className="registry-card">
+                       <img src={pet.photoUrl} alt={getLocalizedText(pet.name, language)} />
+                       <div>
+                         <h4>{getLocalizedText(pet.name, language)}</h4>
+                         <span>{text.petTypes[pet.type]} | {getLocalizedText(pet.breed, language)}</span>
+                       </div>
+                     </article>
                    ))}
                  </div>
                </SectionCard>
@@ -804,13 +726,11 @@ function App() {
             <button onClick={() => setOwnerChatListingId(null)}>×</button>
           </div>
           <div className="chat-modal-body">
-            {(ownerMessages || []).map((m) => (
+            {ownerMessages.map(m => (
               <div key={m.id} className={m.senderId === currentUser?.id ? "msg-bubble mine" : "msg-bubble"}>
-                <div className="msg-header">
-                  <strong>{m.senderName || m.SenderName || "User"}</strong>
-                  <span>{formatDateTime(m.sentAtUtc || m.SentAtUtc, language)}</span>
-                </div>
-                <p>{m.message || m.Message}</p>
+                <strong>{m.senderName}</strong>
+                <p>{m.message}</p>
+                <span>{formatDateTime(m.sentAtUtc, language)}</span>
               </div>
             ))}
           </div>
@@ -831,3 +751,7 @@ function HomeRedirect({ currentUser }) {
 }
 
 export default App;
+\`;
+
+fs.writeFileSync("frontend/petcare-jordan-client/src/App.jsx", fullContent);
+console.log("App.jsx has been FULLY RECONSTRUCTED and fixed!");

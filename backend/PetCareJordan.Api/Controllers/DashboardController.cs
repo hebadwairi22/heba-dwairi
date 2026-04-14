@@ -28,8 +28,8 @@ public class DashboardController(PetCareJordanContext context) : ControllerBase
             await context.LostPetReports.CountAsync(item => item.Status == ReportStatus.Active),
             await context.FoundPetReports.CountAsync(item => item.Status == ReportStatus.Active),
             upcomingVaccineCount,
-            pets.GroupBy(pet => pet.Type.ToString()).ToDictionary(group => group.Key, group => group.Count()),
-            pets.GroupBy(pet => pet.City).ToDictionary(group => group.Key, group => group.Count()));
+            pets.GroupBy(pet => (pet.Type.ToString() ?? "Other")).ToDictionary(group => group.Key, group => group.Count()),
+            pets.GroupBy(pet => (pet.City ?? "Unknown")).ToDictionary(group => group.Key, group => group.Count()));
 
         return Ok(summary);
     }

@@ -13,7 +13,9 @@ public enum PetType
     Dog = 2,
     Bird = 3,
     Rabbit = 4,
-    Other = 5
+    Hamster = 5,
+    Turtle = 6,
+    Other = 7
 }
 
 public enum PetGender

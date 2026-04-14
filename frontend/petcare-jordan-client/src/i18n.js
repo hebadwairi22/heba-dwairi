@@ -8,6 +8,13 @@ export function formatDateTime(value, language) {
   return new Date(value).toLocaleString(loc, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+export function getLocalizedText(value, language) {
+  if (!value || typeof value !== "string") return value;
+  const parts = value.split("|");
+  if (parts.length === 1) return value;
+  return language === "ar" ? parts[0].trim() : parts[1].trim();
+}
+
 export const translations = {
   en: {
     tabs: { home: "Home", adoption: "Adoption", community: "Community", health: "Health", registry: "Registry", appointments: "Appointments", vetCases: "My cases", admin: "Admin" },
@@ -73,7 +80,7 @@ export const translations = {
       noMedicalHistory: "No medical history yet for this pet.",
       noVaccinesRecorded: "No vaccines recorded yet for this pet."
     },
-    petTypes: { Cat: "Cat", Dog: "Dog", Bird: "Bird", Rabbit: "Rabbit", Other: "Other" },
+    petTypes: { Cat: "Cat", Dog: "Dog", Bird: "Bird", Rabbit: "Rabbit", Hamster: "Hamster", Turtle: "Turtle", Other: "Other" },
     petGender: { Male: "Male", Female: "Female" },
     landing: {
       kicker: "PetCare Jordan",
@@ -340,7 +347,7 @@ export const translations = {
       noMedicalHistory: "لا يوجد سجل طبي بعد لهذا الحيوان.",
       noVaccinesRecorded: "لا توجد تطعيمات مسجّلة لهذا الحيوان."
     },
-    petTypes: { Cat: "قط", Dog: "كلب", Bird: "طائر", Rabbit: "أرنب", Other: "أخرى" },
+    petTypes: { Cat: "قط", Dog: "كلب", Bird: "طائر", Rabbit: "أرنب", Hamster: "هامستر", Turtle: "سلحفاة", Other: "أخرى" },
     petGender: { Male: "ذكر", Female: "أنثى" },
     landing: {
       kicker: "PetCare Jordan",

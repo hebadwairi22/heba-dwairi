@@ -20,6 +20,10 @@ async function request(path, options = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && !path.includes("/auth/login")) {
+      localStorage.removeItem("petcareCurrentUser");
+      window.location.href = "/"; // Force reload only for data calls
+    }
     const message = await response.text();
     throw new Error(message || `Request failed for ${path}`);
   }
