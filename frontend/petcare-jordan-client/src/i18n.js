@@ -17,7 +17,7 @@ export function getLocalizedText(value, language) {
 
 export const translations = {
   en: {
-    tabs: { home: "Home", adoption: "Adoption", community: "Community", health: "Health", registry: "Registry", appointments: "Appointments", vetCases: "My cases", admin: "Admin" },
+    tabs: { home: "Home", adoption: "Adoption", community: "Community", health: "Health", registry: "Registry", appointments: "Appointments", chatting: "Chatting", startChat: "Start Chat", vetCases: "My cases", admin: "Admin" },
     common: {
       account: "Account",
       signIn: "Sign in",
@@ -284,7 +284,7 @@ export const translations = {
     }
   },
   ar: {
-    tabs: { home: "الرئيسية", adoption: "التبنّي", community: "المجتمع", health: "الصحة", registry: "السجل", appointments: "المواعيد", vetCases: "حالاتي", admin: "الإدارة" },
+    tabs: { home: "الرئيسية", adoption: "التبنّي", community: "المجتمع", health: "الصحة", registry: "السجل", appointments: "المواعيد", chatting: "المحادثات", startChat: "ابدأ محادثة", vetCases: "حالاتي", admin: "الإدارة" },
     common: {
       account: "الحساب",
       signIn: "تسجيل الدخول",

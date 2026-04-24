@@ -21,11 +21,11 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
             return Forbid();
         }
 
-        var appointments = await BuildAppointmentQuery()
+        var appointments = await BuildAppointmentEntityQuery()
             .Where(item => item.OwnerId == ownerId)
             .ToListAsync();
 
-        return Ok(appointments);
+        return Ok(appointments.Select(MapAppointmentSummary));
     }
 
     [HttpGet("vet/{vetId:int}")]
@@ -36,17 +36,17 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
             return Forbid();
         }
 
-        var appointments = await BuildAppointmentQuery()
+        var appointments = await BuildAppointmentEntityQuery()
             .Where(item => item.VetId == vetId)
             .ToListAsync();
 
-        return Ok(appointments);
+        return Ok(appointments.Select(MapAppointmentSummary));
     }
 
     [HttpGet("{appointmentId:int}")]
     public async Task<ActionResult<AppointmentDetailsDto>> GetAppointmentDetails(int appointmentId)
     {
-        var appointment = await BuildAppointmentQuery()
+        var appointment = await BuildAppointmentEntityQuery()
             .FirstOrDefaultAsync(item => item.Id == appointmentId);
 
         if (appointment is null)
@@ -70,10 +70,11 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
                 item.Sender!.FullName,
                 item.Sender.Role,
                 item.Message,
+                item.ImageDataUrl,
                 item.SentAtUtc))
             .ToListAsync();
 
-        return Ok(new AppointmentDetailsDto(appointment, messages));
+        return Ok(new AppointmentDetailsDto(MapAppointmentSummary(appointment), messages));
     }
 
     [HttpPost]
@@ -125,7 +126,8 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
         });
         await context.SaveChangesAsync();
 
-        var result = await BuildAppointmentQuery().FirstAsync(item => item.Id == appointment.Id);
+        var savedAppointment = await BuildAppointmentEntityQuery().FirstAsync(item => item.Id == appointment.Id);
+        var result = MapAppointmentSummary(savedAppointment);
         return CreatedAtAction(nameof(GetAppointmentDetails), new { appointmentId = appointment.Id }, result);
     }
 
@@ -163,7 +165,8 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
         });
         await context.SaveChangesAsync();
 
-        var result = await BuildAppointmentQuery().FirstAsync(item => item.Id == appointment.Id);
+        var savedAppointment = await BuildAppointmentEntityQuery().FirstAsync(item => item.Id == appointment.Id);
+        var result = MapAppointmentSummary(savedAppointment);
         return Ok(result);
     }
 
@@ -189,11 +192,25 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
             return BadRequest("Only the owner or assigned vet can send messages in this chat.");
         }
 
+        var trimmedMessage = request.Message?.Trim() ?? string.Empty;
+        var trimmedImageDataUrl = string.IsNullOrWhiteSpace(request.ImageDataUrl) ? null : request.ImageDataUrl.Trim();
+
+        if (string.IsNullOrWhiteSpace(trimmedMessage) && string.IsNullOrWhiteSpace(trimmedImageDataUrl))
+        {
+            return BadRequest("A text message or image is required.");
+        }
+
+        if (trimmedImageDataUrl is not null && trimmedImageDataUrl.Length > 3_000_000)
+        {
+            return BadRequest("Image is too large.");
+        }
+
         var message = new ChatMessage
         {
             AppointmentRequestId = appointmentId,
             SenderId = request.SenderId,
-            Message = request.Message.Trim(),
+            Message = trimmedMessage,
+            ImageDataUrl = trimmedImageDataUrl,
             SentAtUtc = DateTime.UtcNow
         };
 
@@ -213,6 +230,7 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
             sender.FullName,
             sender.Role,
             message.Message,
+            message.ImageDataUrl,
             message.SentAtUtc));
     }
 
@@ -220,9 +238,11 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<AdminWorkflowSummaryDto>> GetAdminSummary()
     {
-        var recentAppointments = await BuildAppointmentQuery()
+        var recentAppointments = (await BuildAppointmentEntityQuery()
             .Take(8)
-            .ToListAsync();
+            .ToListAsync())
+            .Select(MapAppointmentSummary)
+            .ToList();
 
         var summary = new AdminWorkflowSummaryDto(
             await context.AppointmentRequests.CountAsync(),
@@ -235,32 +255,37 @@ public class AppointmentsController(PetCareJordanContext context) : ControllerBa
         return Ok(summary);
     }
 
-    private IQueryable<AppointmentSummaryDto> BuildAppointmentQuery()
+    private IQueryable<AppointmentRequest> BuildAppointmentEntityQuery()
     {
         return context.AppointmentRequests
+            .AsNoTracking()
             .Include(item => item.Pet)
             .Include(item => item.Owner)
             .Include(item => item.Vet)
             .Include(item => item.Messages)
-            .OrderByDescending(item => item.CreatedAtUtc)
-            .Select(item => new AppointmentSummaryDto(
-                item.Id,
-                item.PetId,
-                item.Pet!.Name,
-                item.Pet.Type.ToString(),
-                item.Pet.PhotoUrl,
-                item.OwnerId,
-                item.Owner!.FullName,
-                item.Owner.PhoneNumber,
-                item.VetId,
-                item.Vet!.FullName,
-                item.PreferredDateUtc,
-                item.Status,
-                item.Reason,
-                item.OwnerNotes,
-                item.VetNotes,
-                item.CreatedAtUtc,
-                item.UpdatedAtUtc,
-                item.Messages.Count));
+            .OrderByDescending(item => item.CreatedAtUtc);
+    }
+
+    private static AppointmentSummaryDto MapAppointmentSummary(AppointmentRequest item)
+    {
+        return new AppointmentSummaryDto(
+            item.Id,
+            item.PetId,
+            item.Pet?.Name ?? string.Empty,
+            item.Pet?.Type.ToString() ?? string.Empty,
+            item.Pet?.PhotoUrl ?? string.Empty,
+            item.OwnerId,
+            item.Owner?.FullName ?? string.Empty,
+            item.Owner?.PhoneNumber ?? string.Empty,
+            item.VetId,
+            item.Vet?.FullName ?? string.Empty,
+            item.PreferredDateUtc,
+            item.Status,
+            item.Reason ?? string.Empty,
+            item.OwnerNotes ?? string.Empty,
+            item.VetNotes ?? string.Empty,
+            item.CreatedAtUtc,
+            item.UpdatedAtUtc,
+            item.Messages?.Count ?? 0);
     }
 }

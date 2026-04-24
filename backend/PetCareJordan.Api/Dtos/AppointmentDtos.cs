@@ -29,6 +29,7 @@ public record ChatMessageDto(
     string SenderName,
     UserRole SenderRole,
     string Message,
+    string? ImageDataUrl,
     DateTime SentAtUtc);
 
 public record AppointmentDetailsDto(
@@ -49,7 +50,8 @@ public record UpdateAppointmentStatusRequest(
 
 public record SendChatMessageRequest(
     int SenderId,
-    string Message);
+    string Message,
+    string? ImageDataUrl);
 
 public record AdminWorkflowSummaryDto(
     int TotalAppointments,

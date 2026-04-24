@@ -1,5 +1,5 @@
 import { Routes, Route, Link, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { translations, interpolate, formatDate, formatDateTime, getLocalizedText } from "./i18n";
 
@@ -31,26 +31,40 @@ const emptyLostForm = {
 const emptyFoundForm = {
   petType: "Cat", description: "", foundPlace: "", foundDateUtc: "", photoUrl: "", contactName: "", contactPhone: ""
 };
+const CHAT_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+
+function renderChatMessageBody(item, imageClassName = "chat-message-image") {
+  const hasText = Boolean(item.message?.trim());
+  const hasImage = Boolean(item.imageDataUrl);
+
+  return (
+    <>
+      {hasText ? <p>{item.message}</p> : null}
+      {hasImage ? <img className={imageClassName} src={item.imageDataUrl} alt="Chat attachment" /> : null}
+    </>
+  );
+}
 
 function getTabs(currentUser, t) {
   if (!currentUser) return baseTabs;
-  if (currentUser.role === "Vet") return [{ id: "appointments", label: t.tabs.vetCases }, { id: "health", label: t.tabs.health }, { id: "registry", label: t.tabs.registry }, { id: "community", label: t.tabs.community }];
-  if (currentUser.role === "Admin") return [{ id: "admin", label: t.tabs.admin }, { id: "community", label: t.tabs.community }, { id: "registry", label: t.tabs.registry }, { id: "adoption", label: t.tabs.adoption }];
+  if (currentUser.role === "Vet") return [{ id: "chatting", label: t.tabs.chatting }, { id: "health", label: t.tabs.health }, { id: "registry", label: t.tabs.registry }, { id: "community", label: t.tabs.community }];
+  if (currentUser.role === "Admin") return [{ id: "admin", label: t.tabs.admin }, { id: "chatting", label: t.tabs.chatting }, { id: "community", label: t.tabs.community }, { id: "registry", label: t.tabs.registry }, { id: "adoption", label: t.tabs.adoption }];
   return [
+    { id: "start-chat", label: t.tabs.startChat },
     { id: "home", label: t.tabs.home },
     { id: "adoption", label: t.tabs.adoption },
     { id: "community", label: t.tabs.community },
     { id: "health", label: t.tabs.health },
     { id: "registry", label: t.tabs.registry },
-    { id: "appointments", label: t.tabs.appointments }
+    { id: "chatting", label: t.tabs.chatting }
   ];
 }
 
 function getDefaultTab(currentUser) {
   if (!currentUser) return "login";
-  if (currentUser.role === "Vet") return "appointments";
+  if (currentUser.role === "Vet") return "chatting";
   if (currentUser.role === "Admin") return "admin";
-  return "home";
+  return "start-chat";
 }
 
 function SectionCard({ title, subtitle, actions, children }) {
@@ -119,7 +133,7 @@ function AuthPanel({ currentUser, authMode, setAuthMode, loginForm, setLoginForm
   );
 }
 
-function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, onSendMessage, language, getLocalizedText, text, formatDateTime }) {
+function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, onSendMessage, quickReplies, language, getLocalizedText, text, formatDateTime }) {
   if (!details) return <p className="empty-state">{text.common.selectAppointmentChat}</p>;
   return (
     <div className="list-stack">
@@ -131,21 +145,170 @@ function AppointmentChat({ details, currentUser, messageDraft, setMessageDraft, 
         {details.appointment.ownerNotes ? <p>{text.common.ownerNote}: {getLocalizedText(details.appointment.ownerNotes, language)}</p> : null}
         {details.appointment.vetNotes ? <p>{text.common.vetNote}: {getLocalizedText(details.appointment.vetNotes, language)}</p> : null}
       </article>
+      {quickReplies?.length ? (
+        <div className="quick-replies">
+          {quickReplies.map((reply) => (
+            <button key={reply} type="button" className="secondary-button" onClick={() => setMessageDraft(reply)}>
+              {reply}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="list-stack">
+        {details.messages.length === 0 ? <p className="empty-state compact">{language === "ar" ? "ابدأ المحادثة مع الدكتور من هنا." : "Start the conversation with the vet from here."}</p> : null}
         {details.messages.map((item) => (
           <article key={item.id} className="list-card">
             <strong>{getLocalizedText(item.senderName, language)}</strong>
-            <p>{item.message}</p>
+            <div className="chat-message-body">
+              {renderChatMessageBody(item)}
+            </div>
             <div className="meta-line"><span>{text.common[item.senderRole.toLowerCase()] || item.senderRole}</span><span>{formatDateTime(item.sentAtUtc, language)}</span></div>
           </article>
         ))}
       </div>
-      {currentUser ? (
-        <form className="auth-form" onSubmit={(event) => { event.preventDefault(); onSendMessage(); }}>
-          <textarea value={messageDraft} placeholder={text.common.writeMessage} onChange={(event) => setMessageDraft(event.target.value)} style={{ minHeight: 100, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-          <button type="submit">{text.common.sendMessage}</button>
+    </div>
+  );
+}
+
+function ModernAppointmentChat({ details, currentUser, messageDraft, setMessageDraft, messageImageDraft, onPickImage, onClearImage, onSendMessage, quickReplies, language, getLocalizedText, text, formatDateTime, variant = "full", onClose, noticeMessage = "", fallbackCounterpartName = "" }) {
+  const [composeLanguage, setComposeLanguage] = useState(language === "ar" ? "ar" : "en");
+
+  if (!details && variant !== "inline") {
+    return (
+      <div className="chat-empty-state modern">
+        <strong>{language === "ar" ? "اختر دكتور أو محادثة لبدء المتابعة" : "Choose a doctor or conversation to begin"}</strong>
+        <p>{text.common.selectAppointmentChat}</p>
+      </div>
+    );
+  }
+
+  const counterpartName = details
+    ? currentUser?.role === "Vet"
+      ? getLocalizedText(details.appointment.ownerName, language)
+      : getLocalizedText(details.appointment.vetName, language)
+    : fallbackCounterpartName;
+
+  const counterpartRole = currentUser?.role === "Vet"
+    ? (language === "ar" ? "صاحب الحيوان" : "Pet owner")
+    : (language === "ar" ? "الطبيب البيطري" : "Veterinarian");
+
+  if (variant === "inline") {
+    return (
+      <div className="inline-chat-panel">
+        {details?.messages?.length ? (
+          <div className="inline-message-list">
+            {details.messages.map((item) => {
+              const senderLabel = getLocalizedText(item.senderName, language);
+              return (
+                <div key={item.id} className="inline-message-item">
+                  <strong>{senderLabel}</strong>
+                  <div className="chat-message-body inline">
+                    {renderChatMessageBody(item, "chat-message-image inline")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="chat-inline-placeholder">
+            <strong>{language === "ar" ? "لا توجد رسائل لعرضها" : "No messages to display"}</strong>
+          </div>
+        )}
+        {messageImageDraft ? (
+          <div className="inline-chat-image-preview">
+            <img src={messageImageDraft} alt="Selected chat attachment" />
+            <button type="button" className="inline-chat-image-clear" onClick={onClearImage}>×</button>
+          </div>
+        ) : null}
+        <form className="inline-chat-form" onSubmit={(event) => { event.preventDefault(); onSendMessage(); }}>
+          <label className="inline-chat-attach">
+            <input type="file" accept="image/*" className="inline-chat-file-input" onChange={onPickImage} />
+            {language === "ar" ? "صورة +" : "Image +"}
+          </label>
+          <input
+            className={composeLanguage === "ar" ? "inline-chat-input is-rtl" : "inline-chat-input is-ltr"}
+            type="text"
+            value={messageDraft}
+            dir={composeLanguage === "ar" ? "rtl" : "ltr"}
+            lang={composeLanguage}
+            placeholder={composeLanguage === "ar" ? `اكتب رسالة إلى ${counterpartName}` : `Send a message to ${counterpartName}`}
+            onChange={(event) => setMessageDraft(event.target.value)}
+          />
+          <div className="inline-chat-toggle-group">
+            <button
+              type="button"
+              className={composeLanguage === "ar" ? "inline-chat-toggle active" : "inline-chat-toggle"}
+              onClick={() => setComposeLanguage("ar")}
+            >
+              AR
+            </button>
+            <button
+              type="button"
+              className={composeLanguage === "en" ? "inline-chat-toggle active" : "inline-chat-toggle"}
+              onClick={() => setComposeLanguage("en")}
+            >
+              EN
+            </button>
+          </div>
+          <button type="submit" className="inline-chat-send" disabled={!messageDraft.trim() && !messageImageDraft}>
+            {language === "ar" ? "إرسال" : "Send"}
+          </button>
         </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chat-shell">
+      <div className="chat-topbar">
+        <div className="chat-persona">
+          <div className="chat-avatar">{counterpartName?.charAt(0) || "D"}</div>
+          <div>
+            <strong>{counterpartName}</strong>
+            <p>{counterpartRole}</p>
+          </div>
+        </div>
+        <div className="chat-session-meta">
+          <span>{getLocalizedText(details.appointment.petName, language)}</span>
+          <span>{text.appointments["status" + details.appointment.status] || details.appointment.status}</span>
+          <span>{formatDateTime(details.appointment.preferredDateUtc, language)}</span>
+        </div>
+      </div>
+      <div className="chat-case-banner">
+        <strong>{getLocalizedText(details.appointment.reason, language)}</strong>
+        {details.appointment.ownerNotes ? <p>{text.common.ownerNote}: {getLocalizedText(details.appointment.ownerNotes, language)}</p> : null}
+        {details.appointment.vetNotes ? <p>{text.common.vetNote}: {getLocalizedText(details.appointment.vetNotes, language)}</p> : null}
+      </div>
+      {quickReplies?.length ? (
+        <div className="quick-replies modern">
+          {quickReplies.map((reply) => (
+            <button key={reply} type="button" className="secondary-button dark" onClick={() => setMessageDraft(reply)}>
+              {reply}
+            </button>
+          ))}
+        </div>
       ) : null}
+      <div className="chat-messages modern">
+        {details.messages.length === 0 ? <p className="empty-state compact dark">{language === "ar" ? "ابدأ المحادثة مع الدكتور من هنا." : "Start the conversation with the vet from here."}</p> : null}
+        {details.messages.map((item) => {
+          const isMine = item.senderId === currentUser?.id;
+          return (
+            <div key={item.id} className={isMine ? "msg-wrapper mine" : "msg-wrapper theirs"}>
+              <div className={isMine ? "msg-bubble mine" : "msg-bubble theirs"}>
+                <strong>{getLocalizedText(item.senderName, language)}</strong>
+                <div className="chat-message-body modern">
+                  {renderChatMessageBody(item)}
+                </div>
+                <div className="msg-meta">
+                  <span>{text.common[item.senderRole.toLowerCase()] || item.senderRole}</span>
+                  <span>{formatDateTime(item.sentAtUtc, language)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {noticeMessage ? <p className="inline-chat-notice chat-notice-modern">{noticeMessage}</p> : null}
     </div>
   );
 }
@@ -164,12 +327,21 @@ function App() {
   const [vets, setVets] = useState([]);
   const [ownerAppointments, setOwnerAppointments] = useState([]);
   const [vetAppointments, setVetAppointments] = useState([]);
+  const [adminAppointments, setAdminAppointments] = useState([]);
   const [adminSummary, setAdminSummary] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminReports, setAdminReports] = useState([]);
+  const [selectedVetId, setSelectedVetId] = useState(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
   const [appointmentDetails, setAppointmentDetails] = useState(null);
+  const [chatNotice, setChatNotice] = useState("");
+  const [showInlineChatComposer, setShowInlineChatComposer] = useState(false);
+  const [messageImageDraft, setMessageImageDraft] = useState("");
+  const [vetMessageCounts, setVetMessageCounts] = useState({});
+  const [showBellMenu, setShowBellMenu] = useState(false);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState({});
   const [petDetails, setPetDetails] = useState(null);
+  const chatFocusRef = useRef(null);
   const [appointmentForm, setAppointmentForm] = useState(emptyAppointmentForm);
   const [messageDraft, setMessageDraft] = useState("");
   const [vetStatusForm, setVetStatusForm] = useState({ status: "Confirmed", vetNotes: "" });
@@ -194,6 +366,33 @@ function App() {
   const [registerForm, setRegisterForm] = useState(emptyRegisterForm);
   const text = translations[language];
   const tabs = useMemo(() => getTabs(currentUser, text), [currentUser, text]);
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const chatRouteAppointmentId = pathSegments[0] === "chatting" && pathSegments[1] ? Number(pathSegments[1]) : null;
+  const isChatConversationPage = Number.isInteger(chatRouteAppointmentId) && chatRouteAppointmentId > 0;
+  const remoteChatLabel = language === "ar" ? "ما قدرت توصل للعيادة؟" : "Can't reach the clinic?";
+  const remoteChatHint = language === "ar" ? "افتح المحادثة مع الطبيب وأرسل تحديثك مباشرة." : "Open the vet chat and send your update right away.";
+  const openChatLabel = language === "ar" ? "فتح الشات" : "Open chat";
+  const remoteChatActionLabel = language === "ar" ? "التواصل مع الدكتور" : "Message the vet";
+  const remoteChatEmptyState = language === "ar" ? "احجز موعدًا أو افتح موعدًا موجودًا حتى تبدأ المحادثة مع الدكتور." : "Book or open an appointment first to start chatting with the vet.";
+  const remoteQuickReplies = language === "ar"
+    ? [
+        "مرحبا دكتور، ما قدرت أوصل للعيادة. ممكن نكمل المتابعة هون بالشات؟",
+        "أنا متأخر بالطريق وما رح أقدر أوصل بموعدي. شو بتنصحني أعمل الآن؟",
+        "ممكن نحول الموعد لمتابعة كتابية مؤقتًا لحد ما أقدر أوصل؟"
+      ]
+    : [
+        "Hello doctor, I could not make it to the clinic. Can we continue here in chat?",
+        "I am delayed and will miss the appointment. What do you recommend I do now?",
+        "Can we switch this visit to a written follow-up until I can arrive?"
+      ];
+  const appointmentHubTitle = language === "ar" ? "غرف المحادثة" : "Chat Rooms";
+  const doctorListTitle = language === "ar" ? "الأطباء المتاحون" : "Available Vets";
+  const doctorListHint = language === "ar" ? "اختر الطبيب الذي تريد بدء المحادثة معه." : "Choose the veterinarian you want to chat with.";
+  const conversationListTitle = language === "ar" ? "المحادثات الحالية" : "Current Conversations";
+  const conversationListHint = language === "ar" ? "كل دكتور له محادثاته الخاصة." : "Each doctor has their own conversation thread.";
+  const startChatLabel = language === "ar" ? "ابدأ شات" : "Start Chat";
+  const noDoctorChatsLabel = language === "ar" ? "لا توجد محادثات مع هذا الدكتور بعد." : "No conversations with this vet yet.";
+  const activeNowLabel = language === "ar" ? "متاح الآن" : "Available now";
 
   useEffect(() => {
     localStorage.setItem("petcareLanguage", language);
@@ -204,6 +403,22 @@ function App() {
   useEffect(() => {
     if (!tabs.some((item) => item.id === activeTab)) setActiveTab(tabs[0].id);
   }, [tabs, activeTab]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setDismissedNotificationIds({});
+      return;
+    }
+
+    const storageKey = `petcareDismissedChatNotifications:${currentUser.id}`;
+    const stored = localStorage.getItem(storageKey);
+    setDismissedNotificationIds(stored ? JSON.parse(stored) : {});
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(`petcareDismissedChatNotifications:${currentUser.id}`, JSON.stringify(dismissedNotificationIds));
+  }, [currentUser, dismissedNotificationIds]);
 
   useEffect(() => {
     async function loadData() {
@@ -250,10 +465,16 @@ function App() {
       setNotifications([]);
       setOwnerAppointments([]);
       setVetAppointments([]);
+      setAdminAppointments([]);
       setAdminSummary(null);
       setAppointmentDetails(null);
       setPetDetails(null);
       setSelectedAppointmentId(null);
+      setShowInlineChatComposer(false);
+      setMessageImageDraft("");
+      setShowBellMenu(false);
+      setDismissedNotificationIds({});
+      setChatNotice("");
       return;
     }
     localStorage.setItem("petcareCurrentUser", JSON.stringify(currentUser));
@@ -271,8 +492,31 @@ function App() {
       api.getAdminAppointmentSummary().then(setAdminSummary).catch(() => setAdminSummary(null));
       api.getAdminUsers().then(setAdminUsers).catch(() => setAdminUsers([]));
       api.getAdminReports().then(setAdminReports).catch(() => setAdminReports([]));
+      api.getVets()
+        .then(async (vetUsers) => {
+          setVets(vetUsers || []);
+          const appointmentGroups = await Promise.all(
+            (vetUsers || []).map((vet) => api.getVetAppointments(vet.id).catch(() => []))
+          );
+          const mergedAppointments = appointmentGroups.flat().sort((a, b) => new Date(b.updatedAtUtc || b.createdAtUtc) - new Date(a.updatedAtUtc || a.createdAtUtc));
+          setAdminAppointments(mergedAppointments);
+        })
+        .catch(() => setAdminAppointments([]));
     }
   }, [currentUser, selectedAppointmentId]);
+
+  async function loadAppointmentDetails(appointmentId, { includePet = true } = {}) {
+    const data = await api.getAppointmentDetails(appointmentId);
+    setAppointmentDetails(data);
+    setVetStatusForm({ status: data.appointment.status, vetNotes: data.appointment.vetNotes || "" });
+
+    if (includePet) {
+      const pet = await api.getPetDetails(data.appointment.petId);
+      setPetDetails(pet);
+    }
+
+    return data;
+  }
 
   useEffect(() => {
     if (!selectedAppointmentId) {
@@ -280,17 +524,92 @@ function App() {
       setPetDetails(null);
       return;
     }
-    api.getAppointmentDetails(selectedAppointmentId).then((data) => {
-      setAppointmentDetails(data);
-      setVetStatusForm({ status: data.appointment.status, vetNotes: data.appointment.vetNotes || "" });
-      return api.getPetDetails(data.appointment.petId);
-    }).then((pet) => {
-      setPetDetails(pet);
-    }).catch(() => {
+
+    loadAppointmentDetails(selectedAppointmentId).catch(() => {
       setAppointmentDetails(null);
       setPetDetails(null);
     });
   }, [selectedAppointmentId]);
+
+  useEffect(() => {
+    if (!selectedAppointmentId || !currentUser) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      loadAppointmentDetails(selectedAppointmentId, { includePet: false }).catch(() => {});
+    }, 8000);
+
+    return () => window.clearInterval(intervalId);
+  }, [selectedAppointmentId, currentUser]);
+
+  useEffect(() => {
+    if (!["User", "Admin"].includes(currentUser?.role)) return;
+    if (!vets.length) return;
+    if (!selectedVetId || !vets.some((item) => item.id === selectedVetId)) {
+      setSelectedVetId(vets[0].id);
+    }
+  }, [currentUser, vets, selectedVetId]);
+
+  useEffect(() => {
+    if (!["User", "Admin"].includes(currentUser?.role) || !selectedVetId) return;
+    const sourceAppointments = currentUser?.role === "Admin" ? adminAppointments : ownerAppointments;
+    const doctorThreads = sourceAppointments.filter((item) => item.vetId === selectedVetId);
+    if (!doctorThreads.length) return;
+    if (!selectedAppointmentId || !doctorThreads.some((item) => item.id === selectedAppointmentId)) {
+      const latestThread = [...doctorThreads].sort((a, b) => new Date(b.updatedAtUtc || b.createdAtUtc) - new Date(a.updatedAtUtc || a.createdAtUtc))[0];
+      setSelectedAppointmentId(latestThread.id);
+    }
+  }, [currentUser, ownerAppointments, adminAppointments, selectedVetId, selectedAppointmentId]);
+
+  useEffect(() => {
+    if (["User", "Admin"].includes(currentUser?.role) && appointmentDetails?.appointment?.vetId) {
+      setSelectedVetId(appointmentDetails.appointment.vetId);
+    }
+  }, [currentUser, appointmentDetails]);
+
+  useEffect(() => {
+    if (currentUser?.role !== "Vet" || !vetAppointments.length) {
+      setVetMessageCounts({});
+      return;
+    }
+
+    let cancelled = false;
+
+    Promise.all(
+      vetAppointments.map(async (item) => {
+        try {
+          const data = await api.getAppointmentDetails(item.id);
+          const incomingCount = (data.messages || []).filter((message) => message.senderId !== currentUser.id).length;
+          return [item.id, incomingCount];
+        } catch {
+          return [item.id, 0];
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) {
+        setVetMessageCounts(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, vetAppointments]);
+
+  useEffect(() => {
+    if (isChatConversationPage && chatRouteAppointmentId && selectedAppointmentId !== chatRouteAppointmentId) {
+      setSelectedAppointmentId(chatRouteAppointmentId);
+    }
+  }, [isChatConversationPage, chatRouteAppointmentId, selectedAppointmentId]);
+
+  useEffect(() => {
+    if (!appointmentDetails) return;
+
+    const timer = window.setTimeout(() => {
+      chatFocusRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [appointmentDetails]);
 
   const filteredPets = useMemo(() => {
     return pets.filter((pet) => {
@@ -309,6 +628,54 @@ function App() {
       return ownerId?.toString() === currentUser?.id?.toString();
     });
   }, [pets, currentUser]);
+  const ownerConversationThreads = useMemo(() => {
+    const sourceAppointments = currentUser?.role === "Admin" ? adminAppointments : ownerAppointments;
+    return [...sourceAppointments].sort((a, b) => new Date(b.updatedAtUtc || b.createdAtUtc) - new Date(a.updatedAtUtc || a.createdAtUtc));
+  }, [currentUser, ownerAppointments, adminAppointments]);
+  const visibleOwnerThreads = useMemo(() => {
+    if (!selectedVetId) return ownerConversationThreads;
+    return ownerConversationThreads.filter((item) => item.vetId === selectedVetId);
+  }, [ownerConversationThreads, selectedVetId]);
+  const selectedVet = useMemo(() => vets.find((item) => item.id === selectedVetId) || null, [vets, selectedVetId]);
+  const sidebarChatItems = useMemo(() => {
+    if (currentUser?.role === "Vet") {
+      return vetAppointments
+        .map((item) => {
+          const count = vetMessageCounts[item.id] ?? 0;
+          return {
+            id: item.id,
+            senderName: getLocalizedText(item.ownerName, language),
+            preview: getLocalizedText(item.reason, language),
+            count,
+            sortDate: item.updatedAtUtc || item.createdAtUtc || ""
+          };
+        })
+        .filter((item) => item.count > 0 && !dismissedNotificationIds[item.id])
+        .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
+    }
+
+    if (["User", "Admin"].includes(currentUser?.role)) {
+      return ownerConversationThreads
+        .map((item) => {
+          const count = item.messageCount ?? 0;
+          return {
+            id: item.id,
+            senderName: getLocalizedText(item.vetName, language),
+            preview: getLocalizedText(item.reason, language),
+            count,
+            sortDate: item.updatedAtUtc || item.createdAtUtc || ""
+          };
+        })
+        .filter((item) => item.count > 0 && !dismissedNotificationIds[item.id])
+        .sort((a, b) => new Date(b.sortDate) - new Date(a.sortDate));
+    }
+
+    return [];
+  }, [currentUser, vetAppointments, ownerConversationThreads, vetMessageCounts, language, dismissedNotificationIds]);
+  const totalSidebarMessages = useMemo(
+    () => sidebarChatItems.reduce((sum, item) => sum + (item.count || 0), 0),
+    [sidebarChatItems]
+  );
   const featuredAdoptions = adoptions.slice(0, 3);
   const cityCoverage = dashboard ? Object.entries(dashboard.petsByCity || dashboard.PetsByCity || {}) : [];
   const typeCoverage = dashboard ? Object.entries(dashboard.petsByType || dashboard.PetsByType || {}) : [];
@@ -339,6 +706,63 @@ function App() {
 
   function handleLogout() { setCurrentUser(null); navigate("/login"); }
 
+  function openAppointmentChat(appointmentId, prefilledMessage = "", prefilledImageDataUrl = "") {
+    const allAppointments = [...ownerAppointments, ...vetAppointments];
+    const matchingAppointment = allAppointments.find((item) => item.id === appointmentId);
+    if (matchingAppointment?.vetId) {
+      setSelectedVetId(matchingAppointment.vetId);
+    }
+    setSelectedAppointmentId(appointmentId);
+    setShowInlineChatComposer(true);
+    setChatNotice("");
+    setActiveTab("chatting");
+    navigate("/chatting");
+    setDismissedNotificationIds((current) => ({ ...current, [appointmentId]: true }));
+    setMessageDraft(prefilledMessage);
+    setMessageImageDraft(prefilledImageDataUrl);
+  }
+
+  function openNotificationChat(chatItem) {
+    if (!chatItem) return;
+    setDismissedNotificationIds((current) => ({ ...current, [chatItem.id]: true }));
+    openAppointmentChat(chatItem.id);
+  }
+
+  function returnToChatList() {
+    setActiveTab("chatting");
+    navigate("/chatting");
+  }
+
+  function startChatWithVet(vetId, prefilledMessage = "") {
+    setSelectedVetId(vetId);
+    setShowInlineChatComposer(true);
+    setChatNotice("");
+    const existingThread = [...ownerAppointments]
+      .filter((item) => item.vetId === vetId)
+      .sort((a, b) => new Date(b.updatedAtUtc || b.createdAtUtc) - new Date(a.updatedAtUtc || a.createdAtUtc))[0];
+
+    if (existingThread) {
+      openAppointmentChat(existingThread.id, prefilledMessage);
+      return;
+    }
+
+    handleQuickConsult(vetId);
+  }
+
+  function openVetMessageRoll(vetId) {
+    const existingThread = [...ownerAppointments]
+      .filter((item) => item.vetId === vetId)
+      .sort((a, b) => new Date(b.updatedAtUtc || b.createdAtUtc) - new Date(a.updatedAtUtc || a.createdAtUtc))[0];
+
+    setSelectedVetId(vetId);
+    setShowInlineChatComposer(true);
+    setChatNotice("");
+
+    if (existingThread) {
+      openAppointmentChat(existingThread.id);
+    }
+  }
+
   async function handleCreateAppointment(event) {
     event.preventDefault();
     if (!appointmentForm.petId || !appointmentForm.vetId || !appointmentForm.preferredDateUtc) return;
@@ -346,15 +770,62 @@ function App() {
       const created = await api.createAppointment({ ...appointmentForm, ownerId: currentUser.id });
       setOwnerAppointments(prev => [created, ...prev]);
       setAppointmentForm(emptyAppointmentForm);
+      openAppointmentChat(created.id);
     } catch (e) { setError(e.message); }
   }
 
+  function handleChatImagePick(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError(language === "ar" ? "يرجى اختيار صورة فقط" : "Please choose an image file");
+      return;
+    }
+
+    if (file.size > CHAT_IMAGE_MAX_BYTES) {
+      setError(language === "ar" ? "حجم الصورة كبير، اختر صورة أصغر من 2MB" : "Image is too large. Choose one smaller than 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setMessageImageDraft(reader.result);
+        setChatNotice("");
+        setError("");
+      }
+    };
+    reader.onerror = () => {
+      setError(language === "ar" ? "تعذر قراءة الصورة" : "Could not read the image");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearChatImageDraft() {
+    setMessageImageDraft("");
+    setChatNotice("");
+  }
+
   async function handleSendMessage() {
-    if (!selectedAppointmentId || !messageDraft.trim()) return;
+    const trimmedMessage = messageDraft.trim();
+    if (!selectedAppointmentId && selectedVetId && ["User", "Admin"].includes(currentUser?.role) && (trimmedMessage || messageImageDraft)) {
+      await handleQuickConsult(selectedVetId, trimmedMessage, messageImageDraft, true);
+      return;
+    }
+    if (!selectedAppointmentId || (!trimmedMessage && !messageImageDraft)) return;
     try {
-      await api.sendAppointmentMessage(selectedAppointmentId, { senderId: currentUser.id, message: messageDraft });
+      await api.sendAppointmentMessage(selectedAppointmentId, {
+        senderId: currentUser.id,
+        message: trimmedMessage,
+        imageDataUrl: messageImageDraft || null
+      });
       setMessageDraft("");
-      api.getAppointmentDetails(selectedAppointmentId).then(setAppointmentDetails);
+      setMessageImageDraft("");
+      setChatNotice(language === "ar" ? "تم ارسال المسج بنجاح" : "Message sent successfully");
+      loadAppointmentDetails(selectedAppointmentId, { includePet: false }).catch(() => {});
     } catch (e) { setError(e.message); }
   }
 
@@ -415,15 +886,15 @@ function App() {
     });
   }
 
-  async function handleQuickConsult(vetId) {
+  async function handleQuickConsult(vetId, initialMessage = "", initialImageDataUrl = "", sendImmediately = false) {
     if (!currentUser) { setAuthMode("login"); return; }
     try {
       const payload = {
         petId: ownPets[0]?.id || "", // Default to first pet if available
         vetId,
         preferredDateUtc: new Date().toISOString(),
-        reason: "استشارة سريعة | Quick Consultation",
-        ownerNotes: "أريد استشارة الطبيب بخصوص حيواني الأليف | I want to consult the doctor about my pet.",
+        reason: "تعذر الوصول للعيادة | Could not reach the clinic",
+        ownerNotes: "أحتاج متابعة مع الدكتور عبر الشات لأنني لم أتمكن من الوصول للعيادة. | I need to continue with the vet in chat because I could not reach the clinic.",
         ownerId: currentUser.id
       };
       if (!payload.petId) {
@@ -432,9 +903,21 @@ function App() {
       }
       const created = await api.createAppointment(payload);
       setOwnerAppointments(prev => [created, ...prev]);
-      setSelectedAppointmentId(created.id);
-      setActiveTab("appointments");
-      navigate("/appointments");
+      if (sendImmediately && (initialMessage || initialImageDataUrl)) {
+        openAppointmentChat(created.id);
+        await api.sendAppointmentMessage(created.id, {
+          senderId: currentUser.id,
+          message: initialMessage,
+          imageDataUrl: initialImageDataUrl || null
+        });
+        setMessageDraft("");
+        setMessageImageDraft("");
+        setChatNotice(language === "ar" ? "تم ارسال المسج بنجاح" : "Message sent successfully");
+        loadAppointmentDetails(created.id, { includePet: false }).catch(() => {});
+        return;
+      }
+
+      openAppointmentChat(created.id, initialMessage || remoteQuickReplies[0], initialImageDataUrl);
     } catch (e) { setError(e.message); }
   }
 
@@ -472,7 +955,45 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-block">
-          <p className="brand-mark">{text.shell.appName}</p>
+          <div className="sidebar-brand-row">
+            <p className="brand-mark">{text.shell.appName}</p>
+            {currentUser ? (
+              <div className="sidebar-bell-wrap">
+                <button
+                  type="button"
+                  className="sidebar-bell-button"
+                  onClick={() => setShowBellMenu((current) => !current)}
+                >
+                  <span className="sidebar-bell-icon" aria-hidden="true">🔔</span>
+                  <span className="sidebar-bell-badge">{totalSidebarMessages}</span>
+                </button>
+                {showBellMenu ? (
+                  <div className="sidebar-bell-menu">
+                    {sidebarChatItems.length === 0 ? (
+                      <p className="sidebar-bell-empty">{language === "ar" ? "لا توجد رسائل" : "No messages"}</p>
+                    ) : (
+                      sidebarChatItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="sidebar-bell-item"
+                          onClick={() => {
+                            setShowBellMenu(false);
+                            openNotificationChat(item);
+                          }}
+                        >
+                          <div className="sidebar-message-row">
+                            <strong>{item.senderName}</strong>
+                            <span>{item.count}</span>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <h1>{text.shell.mainTitle}</h1>
           <p className="sidebar-copy">{text.shell.mainSubtitle}</p>
         </div>
@@ -582,60 +1103,108 @@ function App() {
               </div>
             </>} />
 
-            <Route path="/appointments" element={<>
-              <div className="split-grid">
-                {currentUser?.role === "User" && (
-                  <SectionCard title={text.appointments.requestTitle}>
-                    <form className="auth-form" onSubmit={handleCreateAppointment}>
-                      <select value={appointmentForm.petId} onChange={(event) => setAppointmentForm(c => ({ ...c, petId: event.target.value }))}>
-                        <option value="">{text.common.selectPet}</option>
-                        {ownPets.map(pet => <option key={pet.id} value={pet.id}>{getLocalizedText(pet.name, language)} | {pet.collarId}</option>)}
-                      </select>
-                      <select value={appointmentForm.vetId} onChange={(event) => setAppointmentForm(c => ({ ...c, vetId: event.target.value }))}>
-                        <option value="">{text.common.selectVet}</option>
-                        {vets.map(vet => <option key={vet.id} value={vet.id}>{getLocalizedText(vet.fullName, language)} | {vet.city}</option>)}
-                      </select>
-                      <input type="datetime-local" value={appointmentForm.preferredDateUtc} onChange={e => setAppointmentForm(c => ({ ...c, preferredDateUtc: e.target.value }))} />
-                      <input type="text" placeholder={text.appointments.reasonPlaceholder} value={appointmentForm.reason} onChange={e => setAppointmentForm(c => ({ ...c, reason: e.target.value }))} />
-                      <textarea value={appointmentForm.ownerNotes} placeholder={text.appointments.notesPlaceholder} onChange={e => setAppointmentForm(c => ({ ...c, ownerNotes: e.target.value }))} style={{ minHeight: 110, borderRadius: 14, border: "1px solid rgba(93, 107, 120, 0.2)", padding: 12, background: "rgba(255,255,255,0.85)" }} />
-                      <button type="submit">{text.appointments.sendRequest}</button>
-                    </form>
-                  </SectionCard>
-                )}
-
-                {currentUser?.role === "Vet" && (
-                  <SectionCard title={text.appointments.vetCasesTitle}>
-                    <div className="list-stack">
-                      {vetAppointments.map(item => (
-                        <article key={item.id} className="list-card" onClick={() => setSelectedAppointmentId(item.id)} style={{ cursor: "pointer" }}>
-                          <strong>{getLocalizedText(item.petName, language)}</strong>
-                          <p>{getLocalizedText(item.reason, language)}</p>
-                          <div className="meta-line"><span>{getLocalizedText(item.ownerName, language)}</span><span>{text.appointments["status" + item.status] || item.status}</span></div>
+            <Route path="/start-chat" element={<>
+              <div className="chat-dashboard single">
+                <SectionCard title={doctorListTitle} subtitle={doctorListHint}>
+                  <div className="doctor-list">
+                    {vets.map((vet) => {
+                      const isActive = selectedVetId === vet.id;
+                      return (
+                        <article key={vet.id} className={isActive ? "doctor-card active" : "doctor-card"} onClick={() => setSelectedVetId(vet.id)}>
+                          <div className="doctor-card-head">
+                            <div className="doctor-avatar">{getLocalizedText(vet.fullName, language)?.charAt(0) || "D"}</div>
+                            <div>
+                              <strong>{getLocalizedText(vet.fullName, language)}</strong>
+                              <p>{getLocalizedText(vet.city, language)}</p>
+                            </div>
+                          </div>
+                          <div className="doctor-card-meta">
+                            <span>{activeNowLabel}</span>
+                            <span>{language === "ar" ? "اختر الطبيب" : "Choose doctor"}</span>
+                          </div>
+                          <button type="button" className="doctor-card-action" onClick={(event) => { event.stopPropagation(); startChatWithVet(vet.id, ""); }}>
+                            {language === "ar" ? "ابدأ محادثة" : "Start Conversation"}
+                          </button>
                         </article>
-                      ))}
-                    </div>
-                  </SectionCard>
-                )}
-
-                {currentUser?.role === "User" && (
-                  <SectionCard title={text.appointments.mineTitle}>
-                    <div className="list-stack">
-                      {ownerAppointments.map(item => (
-                        <article key={item.id} className="list-card" onClick={() => setSelectedAppointmentId(item.id)} style={{ cursor: "pointer" }}>
-                          <strong>{getLocalizedText(item.petName, language)}</strong>
-                          <p>{getLocalizedText(item.reason, language)}</p>
-                          <div className="meta-line"><span>{getLocalizedText(item.vetName, language)}</span><span>{text.appointments["status" + item.status] || item.status}</span></div>
-                        </article>
-                      ))}
-                    </div>
-                  </SectionCard>
-                )}
-
-                <SectionCard title={text.appointments.chatTitle}>
-                  <AppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={setMessageDraft} onSendMessage={handleSendMessage} language={language} getLocalizedText={getLocalizedText} text={text} formatDateTime={formatDateTime} />
+                      );
+                    })}
+                  </div>
                 </SectionCard>
               </div>
             </>} />
+
+<Route path="/chatting" element={<>
+              <div className={["User", "Admin"].includes(currentUser?.role) ? "chat-dashboard single" : "chat-dashboard"}>
+                {["User", "Admin"].includes(currentUser?.role) ? (
+                  <>
+                    <SectionCard title={doctorListTitle} subtitle={doctorListHint}>
+                      <div className="doctor-list">
+                        {vets.map((vet) => {
+                          const isActive = selectedVetId === vet.id;
+                          const threadCount = ownerConversationThreads.filter((item) => item.vetId === vet.id).length;
+                          return (
+                          <article key={vet.id} className={isActive ? "doctor-card active" : "doctor-card"} onClick={() => { setSelectedVetId(vet.id); setShowInlineChatComposer(false); setChatNotice(""); setMessageDraft(""); setMessageImageDraft(""); }}>
+                              <div className="doctor-card-head">
+                                <div className="doctor-avatar">{getLocalizedText(vet.fullName, language)?.charAt(0) || "D"}</div>
+                                <div>
+                                  <strong>{getLocalizedText(vet.fullName, language)}</strong>
+                                  <p>{getLocalizedText(vet.city, language)}</p>
+                                </div>
+                              </div>
+                              <div className="doctor-card-meta">
+                                <span>{activeNowLabel}</span>
+                                <button type="button" className="doctor-message-count" onClick={(event) => { event.stopPropagation(); openVetMessageRoll(vet.id); }}>
+                                  {interpolate(text.common.messagesCount, { n: threadCount })}
+                                </button>
+                              </div>
+                              <button type="button" className="doctor-card-action" onClick={(event) => { event.stopPropagation(); startChatWithVet(vet.id, ""); }}>
+                                {startChatLabel}
+                              </button>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </SectionCard>
+
+                    <div ref={chatFocusRef}>
+                    <SectionCard title={selectedVet ? getLocalizedText(selectedVet.fullName, language) : appointmentHubTitle} subtitle={selectedVet ? (language === "ar" ? "اضغط ابدأ شات ليظهر صندوق الرسالة هنا" : "Press Start Chat to show the message box here") : remoteChatHint}>
+                        {showInlineChatComposer ? (
+                          <ModernAppointmentChat details={appointmentDetails} currentUser={currentUser} messageDraft={messageDraft} setMessageDraft={(value) => { setMessageDraft(value); setChatNotice(""); }} messageImageDraft={messageImageDraft} onPickImage={handleChatImagePick} onClearImage={clearChatImageDraft} onSendMessage={handleSendMessage} quickReplies={[]} language={language} getLocalizedText={getLocalizedText} text={text} formatDateTime={formatDateTime} variant="inline" noticeMessage={chatNotice} fallbackCounterpartName={selectedVet ? getLocalizedText(selectedVet.fullName, language) : ""} onClose={() => { setSelectedAppointmentId(null); setAppointmentDetails(null); setMessageDraft(""); setMessageImageDraft(""); setShowInlineChatComposer(false); setChatNotice(""); }} />
+                      ) : (
+                        <div className="chat-inline-placeholder">
+                          <strong>{language === "ar" ? "اختر دكتور ثم اضغط ابدأ شات" : "Choose a doctor, then press Start Chat"}</strong>
+                        </div>
+                      )}
+                    </SectionCard>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <SectionCard title={text.appointments.vetCasesTitle} subtitle={text.appointments.vetCasesSubtitle}>
+                      <div className="thread-list">
+                        {vetAppointments.map((item) => (
+                          <button key={item.id} type="button" className={selectedAppointmentId === item.id ? "thread-card active" : "thread-card"} onClick={() => openAppointmentChat(item.id)}>
+                            <div className="thread-card-top">
+                              <strong>{getLocalizedText(item.ownerName, language)}</strong>
+                              <span>{formatDateTime(item.preferredDateUtc, language)}</span>
+                            </div>
+                            <p>{getLocalizedText(item.reason, language)}</p>
+                            <div className="thread-card-meta">
+                              <span>{getLocalizedText(item.petName, language)}</span>
+                              <span>{language === "ar" ? `${vetMessageCounts[item.id] ?? 0} رسائل` : `${vetMessageCounts[item.id] ?? 0} messages`}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  </>
+                )}
+              </div>
+            </>} />
+
+<Route path="/chatting/:appointmentId" element={<HomeRedirect currentUser={currentUser} forcedPath="/chatting" />} />
+
+            <Route path="/appointments" element={<HomeRedirect currentUser={{ ...currentUser, role: currentUser?.role === "Admin" ? "Admin" : currentUser?.role }} forcedPath="/chatting" />} />
 
             <Route path="/admin" element={currentUser?.role === "Admin" ? <>
                 <SectionCard title={text.admin.summaryTitle}>
@@ -760,7 +1329,7 @@ function App() {
                           <h4>{getLocalizedText(vet.fullName || vet.FullName, language)}</h4>
                           <span>{vet.city || vet.City}</span>
                           <button className="btn-consult" onClick={() => handleQuickConsult(vet.id)}>
-                            {language === "ar" ? "استشارة فورية" : "Instant Consult"}
+                            {language === "ar" ? "ابدأ شات مع الدكتور" : "Start Chat with Vet"}
                           </button>
                         </div>
                       </article>
@@ -783,7 +1352,7 @@ function App() {
                           <div className="meta-line"><span>{pet.city || pet.City}</span><span>{pet.collarId || pet.CollarId}</span></div>
                           {pet.role === "Vet" && (
                             <button className="btn-consult" onClick={() => handleQuickConsult(pet.id)}>
-                              {language === "ar" ? "استشارة سريعة" : "Quick Consult"}
+                              {language === "ar" ? "ابدأ شات سريع" : "Start Quick Chat"}
                             </button>
                           )}
                         </div>
@@ -797,36 +1366,15 @@ function App() {
         )}
       </main>
 
-      <div className={ownerChatListingId ? "chat-overlay active" : "chat-overlay"} onClick={() => setOwnerChatListingId(null)}>
-        <div className="chat-modal" onClick={e => e.stopPropagation()}>
-          <div className="chat-modal-head">
-            <h3>{language === "ar" ? "محادثة المالك" : "Chat with Owner"}</h3>
-            <button onClick={() => setOwnerChatListingId(null)}>×</button>
-          </div>
-          <div className="chat-modal-body">
-            {(ownerMessages || []).map((m) => (
-              <div key={m.id} className={m.senderId === currentUser?.id ? "msg-bubble mine" : "msg-bubble"}>
-                <div className="msg-header">
-                  <strong>{m.senderName || m.SenderName || "User"}</strong>
-                  <span>{formatDateTime(m.sentAtUtc || m.SentAtUtc, language)}</span>
-                </div>
-                <p>{m.message || m.Message}</p>
-              </div>
-            ))}
-          </div>
-          <form className="chat-modal-foot" onSubmit={handleSendOwnerMessage}>
-            <input value={ownerMsgDraft} onChange={e => setOwnerMsgDraft(e.target.value)} placeholder={text.common.writeMessage} />
-            <button type="submit">{text.common.sendMessage}</button>
-          </form>
-        </div>
-      </div>
     </div>
   );
 }
 
-function HomeRedirect({ currentUser }) {
+function HomeRedirect({ currentUser, forcedPath }) {
   const navigate = useNavigate();
-  useEffect(() => { navigate("/" + getDefaultTab(currentUser), { replace: true }); }, [currentUser]);
+  useEffect(() => {
+    navigate(forcedPath || ("/" + getDefaultTab(currentUser)), { replace: true });
+  }, [currentUser, forcedPath]);
   return null;
 }
 
